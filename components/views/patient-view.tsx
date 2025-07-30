@@ -8,17 +8,25 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle, Calendar } from 'lucide-react'
 
 export function PatientView() {
     const { treatments, claims, users, addClaim } = useAppStore()
     const [showClaimForm, setShowClaimForm] = useState(false)
+    const [showAppointmentForm, setShowAppointmentForm] = useState(false)
     const [formData, setFormData] = useState({
         treatmentId: '',
         documents: [] as string[]
     })
+    const [appointmentData, setAppointmentData] = useState({
+        doctorId: '',
+        date: '',
+        time: '',
+        reason: ''
+    })
 
     const patientId = '3' // Current patient (John Smith)
+    const doctors = users.filter(u => u.role === 'doctor')
     const availableTreatments = treatments.filter(t =>
         t.patientId === patientId &&
         t.status === 'submitted' &&
@@ -51,6 +59,22 @@ export function PatientView() {
         setShowClaimForm(false)
     }
 
+    const handleAppointmentSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!appointmentData.doctorId || !appointmentData.date || !appointmentData.time || !appointmentData.reason) return
+
+        // Simulate appointment booking
+        alert(`Appointment booked successfully!\nDoctor: ${doctors.find(d => d.id === appointmentData.doctorId)?.name}\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nReason: ${appointmentData.reason}`)
+        
+        setAppointmentData({
+            doctorId: '',
+            date: '',
+            time: '',
+            reason: ''
+        })
+        setShowAppointmentForm(false)
+    }
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
         const fileNames = files.map(f => f.name)
@@ -80,17 +104,110 @@ export function PatientView() {
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900">Patient Portal</h2>
-                    <p className="text-gray-600">File claims and track their status</p>
+                    <p className="text-gray-600">Book appointments, file claims and track their status</p>
                 </div>
-                <Button
-                    onClick={() => setShowClaimForm(!showClaimForm)}
-                    className="flex items-center gap-2"
-                    disabled={availableTreatments.length === 0}
-                >
-                    <Plus className="w-4 h-4" />
-                    File New Claim
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setShowAppointmentForm(!showAppointmentForm)}
+                        className="flex items-center gap-2"
+                        variant="outline"
+                    >
+                        <Calendar className="w-4 h-4" />
+                        Book Appointment
+                    </Button>
+                    <Button
+                        onClick={() => setShowClaimForm(!showClaimForm)}
+                        className="flex items-center gap-2"
+                        disabled={availableTreatments.length === 0}
+                    >
+                        <Plus className="w-4 h-4" />
+                        File New Claim
+                    </Button>
+                </div>
             </div>
+
+            {showAppointmentForm && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Calendar className="w-5 h-5" />
+                            Book Appointment with Doctor
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleAppointmentSubmit} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Select Doctor</label>
+                                    <Select 
+                                        value={appointmentData.doctorId} 
+                                        onValueChange={(value) => setAppointmentData(prev => ({ ...prev, doctorId: value }))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Choose a doctor" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {doctors.map(doctor => (
+                                                <SelectItem key={doctor.id} value={doctor.id}>
+                                                    {doctor.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Preferred Date</label>
+                                    <Input
+                                        type="date"
+                                        value={appointmentData.date}
+                                        onChange={(e) => setAppointmentData(prev => ({ ...prev, date: e.target.value }))}
+                                        min={new Date().toISOString().split('T')[0]}
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Preferred Time</label>
+                                    <Select 
+                                        value={appointmentData.time} 
+                                        onValueChange={(value) => setAppointmentData(prev => ({ ...prev, time: value }))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select time slot" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="09:00">09:00 AM</SelectItem>
+                                            <SelectItem value="10:00">10:00 AM</SelectItem>
+                                            <SelectItem value="11:00">11:00 AM</SelectItem>
+                                            <SelectItem value="14:00">02:00 PM</SelectItem>
+                                            <SelectItem value="15:00">03:00 PM</SelectItem>
+                                            <SelectItem value="16:00">04:00 PM</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium mb-2">Reason for Visit</label>
+                                    <Input
+                                        value={appointmentData.reason}
+                                        onChange={(e) => setAppointmentData(prev => ({ ...prev, reason: e.target.value }))}
+                                        placeholder="Describe your symptoms or reason for visit..."
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Button type="submit">Book Appointment</Button>
+                                <Button type="button" variant="outline" onClick={() => setShowAppointmentForm(false)}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            )}
 
             {availableTreatments.length === 0 && !showClaimForm && (
                 <Card>
