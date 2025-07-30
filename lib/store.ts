@@ -7,9 +7,21 @@ export interface Treatment {
     patientId: string
     patientName: string
     diagnosis: string
+    treatmentDetails?: string
     cost: number
+    costBreakdown?: {
+        consultation: number
+        procedures: number
+        medication: number
+        equipment: number
+        other: number
+    }
     date: string
-    status: 'pending' | 'submitted'
+    status: 'pending' | 'submitted' | 'discharged'
+    medicalReports?: string[]
+    dischargeSummary?: string
+    validatedForClaim?: boolean
+    validationNotes?: string
 }
 
 export interface Claim {
@@ -57,7 +69,10 @@ interface AppState {
     setCurrentRole: (role: 'doctor' | 'patient' | 'insurance' | 'bank') => void
     setCurrentUser: (user: User) => void
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
+    updateTreatment: (treatmentId: string, updates: Partial<Treatment>) => void
     submitTreatment: (treatmentId: string) => void
+    addDischargeSummary: (treatmentId: string, summary: string) => void
+    validateTreatmentForClaim: (treatmentId: string, isValid: boolean, notes?: string) => void
     addClaim: (claim: Omit<Claim, 'id' | 'status' | 'submittedDate'>) => void
     reviewClaim: (claimId: string, status: 'approved' | 'rejected', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
@@ -83,9 +98,20 @@ const dummyTreatments: Treatment[] = [
         patientId: '3',
         patientName: 'John Smith',
         diagnosis: 'Annual Physical Examination',
+        treatmentDetails: 'Comprehensive health check-up including blood work, vital signs monitoring, and general physical assessment.',
         cost: 250,
+        costBreakdown: {
+            consultation: 100,
+            procedures: 80,
+            medication: 20,
+            equipment: 30,
+            other: 20
+        },
         date: '2025-07-25',
-        status: 'submitted'
+        status: 'submitted',
+        medicalReports: ['blood_test_results.pdf', 'physical_exam_report.pdf'],
+        validatedForClaim: true,
+        validationNotes: 'All procedures completed successfully and documented properly.'
     },
     {
         id: '2',
@@ -94,9 +120,20 @@ const dummyTreatments: Treatment[] = [
         patientId: '4',
         patientName: 'Emma Wilson',
         diagnosis: 'Sprained Ankle Treatment',
+        treatmentDetails: 'X-ray examination, pain management, and physical therapy consultation for grade 2 ankle sprain.',
         cost: 450,
+        costBreakdown: {
+            consultation: 150,
+            procedures: 200,
+            medication: 50,
+            equipment: 30,
+            other: 20
+        },
         date: '2025-07-28',
-        status: 'submitted'
+        status: 'submitted',
+        medicalReports: ['ankle_xray.pdf', 'treatment_plan.pdf'],
+        validatedForClaim: true,
+        validationNotes: 'Treatment follows standard protocol for ankle sprains.'
     }
 ]
 
@@ -171,6 +208,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         set(state => ({
             treatments: state.treatments.map(t =>
                 t.id === treatmentId ? { ...t, status: 'submitted' } : t
+            )
+        }))
+    },
+
+    updateTreatment: (treatmentId, updates) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? { ...t, ...updates } : t
+            )
+        }))
+    },
+
+    addDischargeSummary: (treatmentId, summary) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? { ...t, dischargeSummary: summary, status: 'discharged' } : t
+            )
+        }))
+    },
+
+    validateTreatmentForClaim: (treatmentId, isValid, notes) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? { ...t, validatedForClaim: isValid, validationNotes: notes } : t
             )
         }))
     },
