@@ -11,28 +11,52 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle } from 'lucide-react'
 
 export function PatientView() {
-    const { treatments, claims, users, addClaim } = useAppStore()
-    const [showClaimForm, setShowClaimForm] = useState(false)
+    const { treatments, claims, users, addClaim, appointments, bookAppointment } = useAppStore();
+    const [showClaimForm, setShowClaimForm] = useState(false);
+    const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+    const [appointmentForm, setAppointmentForm] = useState({
+        doctorId: '',
+        date: '',
+        time: ''
+    });
     const [formData, setFormData] = useState({
         treatmentId: '',
         documents: [] as string[]
-    })
+    });
 
-    const patientId = '3' // Current patient (John Smith)
+    const patientId = '3'; // Current patient (John Smith)
     const availableTreatments = treatments.filter(t =>
         t.patientId === patientId &&
         t.status === 'submitted' &&
         !claims.some(c => c.treatmentId === t.id)
-    )
-    const patientClaims = claims.filter(c => c.patientId === patientId)
+    );
+    const patientClaims = claims.filter(c => c.patientId === patientId);
+    const patientAppointments = appointments.filter(a => a.patientId === patientId);
+    const doctorList = users.filter(u => u.role === 'doctor');
+
+
+    const handleAppointmentSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!appointmentForm.doctorId || !appointmentForm.date || !appointmentForm.time) return;
+        const doctor = users.find(u => u.id === appointmentForm.doctorId);
+        const patient = users.find(u => u.id === patientId);
+        bookAppointment({
+            patientId,
+            patientName: patient ? patient.name : '',
+            doctorId: appointmentForm.doctorId,
+            doctorName: doctor ? doctor.name : '',
+            date: appointmentForm.date,
+            time: appointmentForm.time
+        });
+        setAppointmentForm({ doctorId: '', date: '', time: '' });
+        setShowAppointmentForm(false);
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!formData.treatmentId) return
-
-        const treatment = treatments.find(t => t.id === formData.treatmentId)
-        if (!treatment) return
-
+        e.preventDefault();
+        if (!formData.treatmentId) return;
+        const treatment = treatments.find(t => t.id === formData.treatmentId);
+        if (!treatment) return;
         addClaim({
             patientId,
             patientName: treatment.patientName,
@@ -42,46 +66,126 @@ export function PatientView() {
             diagnosis: treatment.diagnosis,
             cost: treatment.cost,
             documents: formData.documents.length > 0 ? formData.documents : ['medical_report.pdf']
-        })
-
-        setFormData({
-            treatmentId: '',
-            documents: []
-        })
-        setShowClaimForm(false)
-    }
+        });
+        setFormData({ treatmentId: '', documents: [] });
+        setShowClaimForm(false);
+    };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || [])
-        const fileNames = files.map(f => f.name)
-        setFormData(prev => ({ ...prev, documents: [...prev.documents, ...fileNames] }))
-    }
+        const files = Array.from(e.target.files || []);
+        const fileNames = files.map(f => f.name);
+        setFormData(prev => ({ ...prev, documents: [...prev.documents, ...fileNames] }));
+    };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'pending': return <Clock className="w-4 h-4 text-yellow-500" />
-            case 'approved': return <CheckCircle className="w-4 h-4 text-green-500" />
-            case 'rejected': return <XCircle className="w-4 h-4 text-red-500" />
-            default: return null
+            case 'pending': return <Clock className="w-4 h-4 text-yellow-500" />;
+            case 'approved': return <CheckCircle className="w-4 h-4 text-green-500" />;
+            case 'rejected': return <XCircle className="w-4 h-4 text-red-500" />;
+            default: return null;
         }
-    }
+    };
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'pending': return 'warning'
-            case 'approved': return 'default'
-            case 'rejected': return 'destructive'
-            default: return 'secondary'
+            case 'pending': return 'warning';
+            case 'approved': return 'default';
+            case 'rejected': return 'destructive';
+            default: return 'secondary';
         }
-    }
+    };
 
     return (
         <div className="space-y-6">
+            {/* Heading Section */}
+            <div>
+                <h2 className="text-3xl font-bold text-gray-900">Patient Portal</h2>
+                <p className="text-gray-600">File claims and track their status</p>
+            </div>
+
+            {/* Appointment Booking Section */}
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setShowAppointmentForm(v => !v)}>
+                    <CardTitle className="flex items-center gap-2">
+                        <Plus className="w-5 h-5" />
+                        Appointment Booking
+                    </CardTitle>
+                    <span className="text-sm text-gray-500">{showAppointmentForm ? 'Hide' : 'Book'}</span>
+                </CardHeader>
+                {showAppointmentForm && (
+                    <CardContent>
+                        <form onSubmit={handleAppointmentSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Select Doctor</label>
+                                <Select value={appointmentForm.doctorId} onValueChange={value => setAppointmentForm(f => ({ ...f, doctorId: value }))}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a doctor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {doctorList.map(doc => (
+                                            <SelectItem key={doc.id} value={doc.id}>{doc.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Date</label>
+                                    <Input type="date" value={appointmentForm.date} onChange={e => setAppointmentForm(f => ({ ...f, date: e.target.value }))} required />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Time</label>
+                                    <Input type="time" value={appointmentForm.time} onChange={e => setAppointmentForm(f => ({ ...f, time: e.target.value }))} required />
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button type="submit" disabled={!appointmentForm.doctorId || !appointmentForm.date || !appointmentForm.time}>
+                                    Book Appointment
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => setShowAppointmentForm(false)}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                )}
+            </Card>
+
+            {/* My Appointments Section */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>My Appointments</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {patientAppointments.length === 0 ? (
+                        <p className="text-gray-500 text-center py-8">No appointments booked yet.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Doctor</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Time</TableHead>
+                                    <TableHead>Diagnosis</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {patientAppointments.map(app => (
+                                    <TableRow key={app.id}>
+                                        <TableCell>{app.doctorName}</TableCell>
+                                        <TableCell>{app.date}</TableCell>
+                                        <TableCell>{app.time}</TableCell>
+                                        <TableCell>{app.diagnosis || <span className="text-gray-400 italic">Pending</span>}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Claim Management Section */}
             <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-3xl font-bold text-gray-900">Patient Portal</h2>
-                    <p className="text-gray-600">File claims and track their status</p>
-                </div>
                 <Button
                     onClick={() => setShowClaimForm(!showClaimForm)}
                     className="flex items-center gap-2"
@@ -130,7 +234,6 @@ export function PatientView() {
                                     </SelectContent>
                                 </Select>
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium mb-2">Upload Documents</label>
                                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
@@ -159,7 +262,6 @@ export function PatientView() {
                                     )}
                                 </div>
                             </div>
-
                             <div className="flex gap-2">
                                 <Button type="submit" disabled={!formData.treatmentId}>
                                     Submit Claim
@@ -228,5 +330,5 @@ export function PatientView() {
                 </CardContent>
             </Card>
         </div>
-    )
+    );
 }

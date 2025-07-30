@@ -1,3 +1,13 @@
+export interface Appointment {
+    id: string
+    patientId: string
+    patientName: string
+    doctorId: string
+    doctorName: string
+    date: string
+    time: string
+    diagnosis?: string // To be filled by doctor later
+}
 import { create } from 'zustand'
 
 export interface Treatment {
@@ -53,11 +63,15 @@ interface AppState {
     claims: Claim[]
     payments: Payment[]
 
+    appointments: Appointment[]
+
     // Actions
     setCurrentRole: (role: 'doctor' | 'patient' | 'insurance' | 'bank') => void
     setCurrentUser: (user: User) => void
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     submitTreatment: (treatmentId: string) => void
+    bookAppointment: (appointment: Omit<Appointment, 'id' | 'diagnosis'>) => void
+    updateAppointmentDiagnosis: (appointmentId: string, diagnosis: string) => void
     addClaim: (claim: Omit<Claim, 'id' | 'status' | 'submittedDate'>) => void
     reviewClaim: (claimId: string, status: 'approved' | 'rejected', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
@@ -143,6 +157,8 @@ const dummyPayments: Payment[] = [
     }
 ]
 
+const dummyAppointments: Appointment[] = []
+
 export const useAppStore = create<AppState>((set, get) => ({
     currentUser: dummyUsers[0],
     currentRole: 'doctor',
@@ -150,6 +166,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     treatments: dummyTreatments,
     claims: dummyClaims,
     payments: dummyPayments,
+
+    appointments: dummyAppointments,
 
     setCurrentRole: (role) => {
         const user = get().users.find(u => u.role === role)
@@ -236,6 +254,25 @@ export const useAppStore = create<AppState>((set, get) => ({
                         bankNotes: notes
                     }
                     : p
+            )
+        }))
+    }
+    ,
+    bookAppointment: (appointment) => {
+        const patient = get().users.find(u => u.id === appointment.patientId)
+        const doctor = get().users.find(u => u.id === appointment.doctorId)
+        const newAppointment: Appointment = {
+            ...appointment,
+            id: Date.now().toString(),
+            patientName: patient ? patient.name : '',
+            doctorName: doctor ? doctor.name : '',
+        }
+        set(state => ({ appointments: [...state.appointments, newAppointment] }))
+    },
+    updateAppointmentDiagnosis: (appointmentId, diagnosis) => {
+        set(state => ({
+            appointments: state.appointments.map(a =>
+                a.id === appointmentId ? { ...a, diagnosis } : a
             )
         }))
     }
