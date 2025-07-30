@@ -1,0 +1,46 @@
+# Semgrep Configuration
+rules:
+  # Custom rules for Next.js security
+  - id: nextjs-unsafe-dangerouslySetInnerHTML
+    pattern: dangerouslySetInnerHTML={{ __html: $VAR }}
+    message: "Unsafe use of dangerouslySetInnerHTML detected"
+    languages: [typescript, javascript]
+    severity: WARNING
+    
+  - id: nextjs-unsafe-eval
+    pattern: eval($EXPR)
+    message: "Use of eval() detected - potential security risk"
+    languages: [typescript, javascript]
+    severity: ERROR
+    
+  - id: nextjs-console-log
+    pattern: console.log(...)
+    message: "Console.log found - should be removed in production"
+    languages: [typescript, javascript]
+    severity: INFO
+    
+  - id: react-missing-key-prop
+    pattern: |
+      <$TAG ... />
+    pattern-not: |
+      <$TAG key=... ... />
+    pattern-inside: |
+      $ARR.map(...)
+    message: "Missing key prop in React element inside map"
+    languages: [typescript, javascript]
+    severity: WARNING
+
+  # Security rules
+  - id: hardcoded-secret
+    pattern-either:
+      - pattern: |
+          const $VAR = "$SECRET"
+      - pattern: |
+          let $VAR = "$SECRET"
+      - pattern: |
+          var $VAR = "$SECRET"
+    pattern-regex: 
+      - "(?i)(password|secret|key|token|api_key).*=.*['\"][a-zA-Z0-9]{8,}['\"]"
+    message: "Potential hardcoded secret detected"
+    languages: [typescript, javascript]
+    severity: ERROR
