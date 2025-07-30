@@ -139,7 +139,7 @@ export function BankView() {
                                                             View Details
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
-                                                        <DropdownMenuItem 
+                                                        <DropdownMenuItem
                                                             onClick={() => {
                                                                 handlePaymentAction(payment.id, 'pay')
                                                                 setSelectedPayment(payment.id)
@@ -149,7 +149,7 @@ export function BankView() {
                                                             <CheckCircle className="mr-2 h-4 w-4" />
                                                             Process Payment
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem 
+                                                        <DropdownMenuItem
                                                             onClick={() => {
                                                                 handlePaymentAction(payment.id, 'reject')
                                                                 setSelectedPayment(payment.id)
@@ -379,7 +379,7 @@ export function BankView() {
             {viewingPayment && (() => {
                 const payment = [...pendingPayments, ...getAllProcessedPayments()].find(p => p.id === viewingPayment)
                 const claimDetails = payment ? getPaymentDetails(payment.claimId) : null
-                
+
                 if (!payment || !claimDetails) return null
 
                 return (
@@ -470,7 +470,7 @@ export function BankView() {
                                             </Badge>
                                         </div>
                                     </div>
-                                    
+
                                     <div>
                                         <h4 className="font-medium text-gray-900 mb-2">Claim Details</h4>
                                         <div className="bg-gray-50 p-3 rounded-md">
