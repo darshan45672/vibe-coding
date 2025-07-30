@@ -66,7 +66,7 @@ export interface Payment {
     id: string
     claimId: string
     amount: number
-    status: 'initiated' | 'completed'
+    status: 'pending' | 'initiated' | 'completed' | 'rejected'
     initiatedDate: string
     completedDate?: string
     bankNotes?: string
@@ -99,16 +99,12 @@ interface AppState {
     reviewClaim: (claimId: string, status: 'approved' | 'rejected' | 'more-info-requested', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
     completePayment: (paymentId: string, notes?: string) => void
-    addCommunication: (communication: Omit<Communication, 'id' | 'timestamp' | 'isRead'>) => void
-    markCommunicationRead: (communicationId: string) => void
+    rejectPayment: (paymentId: string, notes?: string) => void
     addPolicy: (policy: Omit<Policy, 'id'>) => void
     updatePolicy: (policyId: string, updates: Partial<Policy>) => void
     forwardClaimToBank: (claimId: string) => void
     checkEligibility: (claimId: string) => void
     calculateRiskScore: (claimId: string) => void
-    sendQuickMessage: (claimId: string, fromRole: 'doctor' | 'patient' | 'insurance' | 'bank', toRole: 'doctor' | 'patient' | 'insurance' | 'bank', messageType: 'request-info' | 'provide-update' | 'ask-question' | 'custom', customMessage?: string) => void
-    markAllCommunicationsRead: (role: 'doctor' | 'patient' | 'insurance' | 'bank') => void
-    getCommunicationsForRole: (role: 'doctor' | 'patient' | 'insurance' | 'bank') => Communication[]
 }
 
 // Dummy data
@@ -220,6 +216,13 @@ const dummyPayments: Payment[] = [
         initiatedDate: '2025-07-27',
         completedDate: '2025-07-28',
         bankNotes: 'Payment processed successfully to patient account'
+    },
+    {
+        id: '2',
+        claimId: '1',
+        amount: 360, // 80% coverage for a $450 claim
+        status: 'pending',
+        initiatedDate: '2025-07-30'
     }
 ]
 
@@ -346,22 +349,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         
         // Auto-calculate risk score and check for fraud
         get().calculateRiskScore(newClaim.id)
-
-        // Auto-generate communication for new claim
-        get().addCommunication({
-            claimId: newClaim.id,
-            fromRole: 'patient',
-            toRole: 'insurance',
-            message: `New insurance claim submitted for ${claim.diagnosis}. Treatment cost: $${claim.cost}. Please review the attached documents.`
-        })
-
-        // Notify insurance about new claim
-        get().addCommunication({
-            claimId: newClaim.id,
-            fromRole: 'insurance',
-            toRole: 'patient',
-            message: `Thank you for submitting your claim. Claim ID: ${newClaim.id}. We will review your claim within 3-5 business days.`
-        })
     },
 
     reviewClaim: (claimId, status, notes) => {
@@ -379,38 +366,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             )
         }))
 
-        // Auto-generate communication based on status
-        const claim = get().claims.find(c => c.id === claimId)
-        if (claim) {
-            let autoMessage = ''
-            let toRole: 'doctor' | 'patient' | 'insurance' | 'bank' = 'patient'
-
-            switch (status) {
-                case 'approved':
-                    autoMessage = `Your claim for ${claim.diagnosis} has been approved. Payment of $${Math.floor(claim.cost * 0.8)} will be processed shortly.`
-                    toRole = 'patient'
-                    break
-                case 'rejected':
-                    autoMessage = `Your claim for ${claim.diagnosis} has been rejected. Reason: ${notes || 'Does not meet policy requirements'}`
-                    toRole = 'patient'
-                    break
-                case 'more-info-requested':
-                    autoMessage = `Additional information required for claim ${claimId} - ${claim.diagnosis}. ${notes || 'Please provide additional documentation.'}`
-                    toRole = 'doctor'
-                    break
-            }
-
-            // Add auto-generated communication
-            get().addCommunication({
-                claimId,
-                fromRole: 'insurance',
-                toRole,
-                message: autoMessage
-            })
-        }
-
         // Auto-create payment for approved claims
         if (status === 'approved') {
+            const claim = get().claims.find(c => c.id === claimId)
             if (claim) {
                 const policy = get().policies.find(p => p.isActive)
                 const coveragePercentage = policy?.coveragePercentage || 80
@@ -418,7 +376,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     id: Date.now().toString(),
                     claimId,
                     amount: Math.floor(claim.cost * (coveragePercentage / 100)),
-                    status: 'initiated',
+                    status: 'pending',
                     initiatedDate: new Date().toISOString().split('T')[0]
                 }
                 set(state => ({ payments: [...state.payments, payment] }))
@@ -433,7 +391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const newPayment: Payment = {
             ...payment,
             id: Date.now().toString(),
-            status: 'initiated',
+            status: 'pending',
             initiatedDate: new Date().toISOString().split('T')[0]
         }
         set(state => ({ payments: [...state.payments, newPayment] }))
@@ -454,20 +412,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         }))
     },
 
-    addCommunication: (communication) => {
-        const newCommunication: Communication = {
-            ...communication,
-            id: Date.now().toString(),
-            timestamp: new Date().toISOString(),
-            isRead: false
-        }
-        set(state => ({ communications: [...state.communications, newCommunication] }))
-    },
-
-    markCommunicationRead: (communicationId) => {
+    rejectPayment: (paymentId, notes) => {
         set(state => ({
-            communications: state.communications.map(c =>
-                c.id === communicationId ? { ...c, isRead: true } : c
+            payments: state.payments.map(p =>
+                p.id === paymentId
+                    ? {
+                        ...p,
+                        status: 'rejected',
+                        completedDate: new Date().toISOString().split('T')[0],
+                        bankNotes: notes
+                    }
+                    : p
             )
         }))
     },
@@ -553,46 +508,5 @@ export const useAppStore = create<AppState>((set, get) => ({
                 set(state => ({ fraudAlerts: [...state.fraudAlerts, fraudAlert] }))
             }
         }
-    },
-
-    // Dynamic Communication Functions
-    sendQuickMessage: (claimId, fromRole, toRole, messageType, customMessage) => {
-        const claim = get().claims.find(c => c.id === claimId)
-        let message = customMessage || ''
-
-        if (!customMessage) {
-            switch (messageType) {
-                case 'request-info':
-                    message = `Additional information is needed for claim ${claimId}. Please provide the required documentation.`
-                    break
-                case 'provide-update':
-                    message = `Update on claim ${claimId}: ${claim?.diagnosis || 'claim'} is being processed.`
-                    break
-                case 'ask-question':
-                    message = `I have a question regarding claim ${claimId}. Please clarify the treatment details.`
-                    break
-                default:
-                    message = `Message regarding claim ${claimId}`
-            }
-        }
-
-        get().addCommunication({
-            claimId,
-            fromRole,
-            toRole,
-            message
-        })
-    },
-
-    markAllCommunicationsRead: (role) => {
-        set(state => ({
-            communications: state.communications.map(c =>
-                c.toRole === role ? { ...c, isRead: true } : c
-            )
-        }))
-    },
-
-    getCommunicationsForRole: (role) => {
-        return get().communications.filter(c => c.toRole === role || c.fromRole === role)
     }
 }))
