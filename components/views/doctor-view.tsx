@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type MedicalReport } from '@/lib/store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ export function DoctorView() {
     const [quickNotes, setQuickNotes] = useState('')
     const [selectedDateRange, setSelectedDateRange] = useState('week')
     const [showNotifications, setShowNotifications] = useState(false)
+    const [activeSection, setActiveSection] = useState<'notifications' | 'analytics' | 'appointments' | 'quickNotes' | null>(null)
     const [formData, setFormData] = useState({
         patientId: '',
         patientName: '',
@@ -43,8 +44,11 @@ export function DoctorView() {
             other: ''
         },
         date: new Date().toISOString().split('T')[0],
-        medicalReports: [] as string[]
+        medicalReports: [] as MedicalReport[]
     })
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [currentStep, setCurrentStep] = useState(1)
     const [dischargeSummary, setDischargeSummary] = useState('')
     const [validationData, setValidationData] = useState({
         isValid: true,
@@ -58,7 +62,7 @@ export function DoctorView() {
     // Enhanced filtering and search
     const filteredTreatments = doctorTreatments.filter(treatment => {
         const matchesSearch = treatment.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            treatment.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+            treatment.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
         const matchesStatus = filterStatus === 'all' || treatment.status === filterStatus
         const matchesPatient = filterPatient === 'all' || treatment.patientId === filterPatient
         return matchesSearch && matchesStatus && matchesPatient
@@ -72,8 +76,8 @@ export function DoctorView() {
         return treatmentDate >= oneWeekAgo
     }).length
 
-    const pendingActions = doctorTreatments.filter(t => 
-        t.status === 'pending' || 
+    const pendingActions = doctorTreatments.filter(t =>
+        t.status === 'pending' ||
         (t.status === 'submitted' && !t.dischargeSummary) ||
         (t.status === 'submitted' && t.validatedForClaim === undefined)
     ).length
@@ -81,9 +85,9 @@ export function DoctorView() {
     // Advanced analytics
     const totalRevenue = doctorTreatments.reduce((sum, t) => sum + t.cost, 0)
     const avgTreatmentCost = doctorTreatments.length > 0 ? totalRevenue / doctorTreatments.length : 0
-    const successRate = doctorTreatments.length > 0 ? 
+    const successRate = doctorTreatments.length > 0 ?
         (doctorTreatments.filter(t => t.validatedForClaim === true).length / doctorTreatments.length) * 100 : 0
-    
+
     // Patient demographics
     const uniquePatients = [...new Set(doctorTreatments.map(t => t.patientId))].length
     const repeatPatients = doctorTreatments.reduce((acc, t) => {
@@ -98,16 +102,30 @@ export function DoctorView() {
         acc[diagnosis] = (acc[diagnosis] || 0) + 1
         return acc
     }, {} as Record<string, number>)
-    const mostCommonDiagnosis = Object.entries(topDiagnoses).sort(([,a], [,b]) => b - a)[0]
+    const mostCommonDiagnosis = Object.entries(topDiagnoses).sort(([, a], [, b]) => b - a)[0]
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!formData.patientId || !formData.diagnosis || !formData.cost) return
+    // Function to handle section toggling - only one section can be active at a time
+    const handleSectionToggle = (section: 'notifications' | 'analytics' | 'appointments' | 'quickNotes') => {
+        if (activeSection === section) {
+            // If clicking the same section, close it
+            setActiveSection(null)
+        } else {
+            // Otherwise, open the new section and close others
+            setActiveSection(section)
+        }
+    }
 
-        const patient = patients.find(p => p.id === formData.patientId)
-        if (!patient) return
+    const validateForm = () => {
+        const errors: Record<string, string> = {}
 
-        const totalCost = parseFloat(formData.cost)
+        if (!formData.patientId) errors.patientId = 'Please select a patient'
+        if (!formData.diagnosis.trim()) errors.diagnosis = 'Diagnosis is required'
+        if (!formData.treatmentDetails.trim()) errors.treatmentDetails = 'Treatment details are required'
+        if (!formData.cost || parseFloat(formData.cost) <= 0) errors.cost = 'Valid cost is required'
+        if (!formData.date) errors.date = 'Treatment date is required'
+        if (formData.medicalReports.length === 0) errors.medicalReports = 'At least one medical report is required'
+
+        // Validate cost breakdown totals
         const breakdown = {
             consultation: parseFloat(formData.costBreakdown.consultation) || 0,
             procedures: parseFloat(formData.costBreakdown.procedures) || 0,
@@ -115,21 +133,18 @@ export function DoctorView() {
             equipment: parseFloat(formData.costBreakdown.equipment) || 0,
             other: parseFloat(formData.costBreakdown.other) || 0
         }
+        const totalBreakdown = Object.values(breakdown).reduce((sum, val) => sum + val, 0)
+        const totalCost = parseFloat(formData.cost) || 0
 
-        addTreatment({
-            doctorId: '1',
-            doctorName: 'Dr. Sarah Johnson',
-            patientId: formData.patientId,
-            patientName: patient.name,
-            diagnosis: formData.diagnosis,
-            treatmentDetails: formData.treatmentDetails,
-            cost: totalCost,
-            costBreakdown: breakdown,
-            date: formData.date,
-            medicalReports: formData.medicalReports,
-            validatedForClaim: false
-        })
+        if (Math.abs(totalBreakdown - totalCost) > 0.01) {
+            errors.costBreakdown = `Cost breakdown (${totalBreakdown.toFixed(2)}) must equal total cost (${totalCost.toFixed(2)})`
+        }
 
+        setFormErrors(errors)
+        return Object.keys(errors).length === 0
+    }
+
+    const resetForm = () => {
         setFormData({
             patientId: '',
             patientName: '',
@@ -146,19 +161,146 @@ export function DoctorView() {
             date: new Date().toISOString().split('T')[0],
             medicalReports: []
         })
-        setShowAddForm(false)
+        setFormErrors({})
+        setCurrentStep(1)
+        setIsSubmitting(false)
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        if (!validateForm()) {
+            // Scroll to first error
+            const firstErrorElement = document.querySelector('.error-field')
+            if (firstErrorElement) {
+                firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+            return
+        }
+
+        setIsSubmitting(true)
+
+        try {
+            const patient = patients.find(p => p.id === formData.patientId)
+            if (!patient) throw new Error('Patient not found')
+
+            const totalCost = parseFloat(formData.cost)
+            const breakdown = {
+                consultation: parseFloat(formData.costBreakdown.consultation) || 0,
+                procedures: parseFloat(formData.costBreakdown.procedures) || 0,
+                medication: parseFloat(formData.costBreakdown.medication) || 0,
+                equipment: parseFloat(formData.costBreakdown.equipment) || 0,
+                other: parseFloat(formData.costBreakdown.other) || 0
+            }
+
+            // Simulate API call delay
+            await new Promise(resolve => setTimeout(resolve, 1000))
+
+            addTreatment({
+                doctorId: '1',
+                doctorName: 'Dr. Sarah Johnson',
+                patientId: formData.patientId,
+                patientName: patient.name,
+                diagnosis: formData.diagnosis,
+                treatmentDetails: formData.treatmentDetails,
+                cost: totalCost,
+                costBreakdown: breakdown,
+                date: formData.date,
+                medicalReports: formData.medicalReports,
+                validatedForClaim: false
+            })
+
+            // Success feedback
+            alert('Treatment added successfully! 🎉')
+            resetForm()
+            setShowAddForm(false)
+
+        } catch (error) {
+            alert('Error adding treatment. Please try again.')
+            console.error('Error:', error)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
-        const fileNames = files.map(f => f.name)
-        setFormData(prev => ({ ...prev, medicalReports: [...prev.medicalReports, ...fileNames] }))
+
+        if (files.length === 0) return
+
+        // Validate file types and sizes
+        const validFiles = files.filter(file => {
+            const isValidType = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'].includes(
+                file.name.toLowerCase().split('.').pop() || ''
+            )
+            const isValidSize = file.size <= 10 * 1024 * 1024 // 10MB
+
+            if (!isValidType) {
+                alert(`Invalid file type: ${file.name}. Please upload PDF, DOC, DOCX, JPG, or PNG files.`)
+                return false
+            }
+            if (!isValidSize) {
+                alert(`File too large: ${file.name}. Maximum size is 10MB.`)
+                return false
+            }
+            return true
+        })
+
+        const newReports: MedicalReport[] = validFiles.map(file => ({
+            id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            fileName: file.name,
+            uploadDate: new Date().toISOString().split('T')[0],
+            status: Math.random() > 0.3 ? 'uploaded' : 'pending', // Simulate different statuses
+            type: getFileType(file.name),
+            notes: `Uploaded on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`
+        }))
+
+        setFormData(prev => ({
+            ...prev,
+            medicalReports: [...prev.medicalReports, ...newReports]
+        }))
+
+        // Clear form errors for medical reports if files are added
+        if (formErrors.medicalReports && newReports.length > 0) {
+            setFormErrors(prev => ({ ...prev, medicalReports: '' }))
+        }
+
+        // Reset file input
+        e.target.value = ''
+    }
+
+    const removeReport = (reportId: string) => {
+        setFormData(prev => ({
+            ...prev,
+            medicalReports: prev.medicalReports.filter(report => report.id !== reportId)
+        }))
+    }
+
+    const updateFormReportStatus = (reportId: string, newStatus: MedicalReport['status']) => {
+        setFormData(prev => ({
+            ...prev,
+            medicalReports: prev.medicalReports.map(report =>
+                report.id === reportId ? { ...report, status: newStatus } : report
+            )
+        }))
+    }
+
+    const getFileType = (fileName: string): MedicalReport['type'] => {
+        const extension = fileName.toLowerCase().split('.').pop() || ''
+        const name = fileName.toLowerCase()
+
+        if (name.includes('lab') || name.includes('blood') || name.includes('test')) return 'lab_result'
+        if (name.includes('xray') || name.includes('x-ray')) return 'xray'
+        if (name.includes('prescription') || name.includes('rx')) return 'prescription'
+        if (name.includes('scan') || name.includes('mri') || name.includes('ct')) return 'scan'
+        if (['pdf', 'doc', 'docx'].includes(extension)) return 'document'
+        return 'other'
     }
 
     const handleDischargeSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         if (!selectedTreatment || !dischargeSummary) return
-        
+
         addDischargeSummary(selectedTreatment, dischargeSummary)
         setDischargeSummary('')
         setSelectedTreatment(null)
@@ -168,7 +310,7 @@ export function DoctorView() {
     const handleValidationSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         if (!selectedTreatment) return
-        
+
         validateTreatmentForClaim(selectedTreatment, validationData.isValid, validationData.notes)
         setValidationData({ isValid: true, notes: '' })
         setSelectedTreatment(null)
@@ -185,16 +327,17 @@ export function DoctorView() {
     }
 
     const exportToCSV = () => {
-        const headers = ['Patient', 'Diagnosis', 'Date', 'Cost', 'Status', 'Validated']
+        const headers = ['Patient', 'Diagnosis', 'Date', 'Cost', 'Status', 'Validated', 'Reports Status']
         const rows = doctorTreatments.map(t => [
             t.patientName,
             t.diagnosis,
             t.date,
             t.cost.toString(),
             t.status,
-            t.validatedForClaim ? 'Yes' : 'No'
+            t.validatedForClaim ? 'Yes' : 'No',
+            t.medicalReports ? `${t.medicalReports.length} reports (${t.medicalReports.filter(r => r.status === 'verified' || r.status === 'uploaded').length} ready)` : 'No reports'
         ])
-        
+
         const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n')
         const blob = new Blob([csvContent], { type: 'text/csv' })
         const url = window.URL.createObjectURL(blob)
@@ -205,10 +348,20 @@ export function DoctorView() {
         window.URL.revokeObjectURL(url)
     }
 
+    const updateReportStatus = (treatmentId: string, reportId: string, newStatus: MedicalReport['status']) => {
+        const treatment = doctorTreatments.find(t => t.id === treatmentId)
+        if (treatment && treatment.medicalReports) {
+            const updatedReports = treatment.medicalReports.map(report =>
+                report.id === reportId ? { ...report, status: newStatus } : report
+            )
+            updateTreatment(treatmentId, { medicalReports: updatedReports })
+        }
+    }
+
     const getDateRangeData = (range: string) => {
         const now = new Date()
         let startDate = new Date()
-        
+
         switch (range) {
             case 'week':
                 startDate.setDate(now.getDate() - 7)
@@ -223,7 +376,7 @@ export function DoctorView() {
                 startDate.setFullYear(now.getFullYear() - 1)
                 break
         }
-        
+
         return doctorTreatments.filter(t => new Date(t.date) >= startDate)
     }
 
@@ -238,9 +391,9 @@ export function DoctorView() {
                     </div>
                     <div className="flex gap-2 flex-wrap">
                         <Button
-                            variant="outline"
+                            variant={activeSection === 'notifications' ? 'default' : 'outline'}
                             size="sm"
-                            onClick={() => setShowNotifications(!showNotifications)}
+                            onClick={() => handleSectionToggle('notifications')}
                             className="flex items-center gap-2"
                         >
                             <Bell className="w-4 h-4" />
@@ -252,27 +405,27 @@ export function DoctorView() {
                             )}
                         </Button>
                         <Button
-                            variant="outline" 
+                            variant={activeSection === 'analytics' ? 'default' : 'outline'}
                             size="sm"
-                            onClick={() => setShowAnalytics(!showAnalytics)}
+                            onClick={() => handleSectionToggle('analytics')}
                             className="flex items-center gap-2"
                         >
                             <BarChart3 className="w-4 h-4" />
                             Analytics
                         </Button>
                         <Button
-                            variant="outline"
+                            variant={activeSection === 'appointments' ? 'default' : 'outline'}
                             size="sm"
-                            onClick={() => setShowAppointments(!showAppointments)}
+                            onClick={() => handleSectionToggle('appointments')}
                             className="flex items-center gap-2"
                         >
                             <Calendar className="w-4 h-4" />
                             Schedule
                         </Button>
                         <Button
-                            variant="outline"
+                            variant={activeSection === 'quickNotes' ? 'default' : 'outline'}
                             size="sm"
-                            onClick={() => setShowQuickNotes(!showQuickNotes)}
+                            onClick={() => handleSectionToggle('quickNotes')}
                             className="flex items-center gap-2"
                         >
                             <MessageSquare className="w-4 h-4" />
@@ -288,253 +441,468 @@ export function DoctorView() {
                             Export
                         </Button>
                         <Button
-                            onClick={() => setShowAddForm(!showAddForm)}
-                            className="flex items-center gap-2"
+                            onClick={() => {
+                                resetForm()
+                                setShowAddForm(true)
+                            }}
+                            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg"
+                            size="lg"
                         >
-                            <Plus className="w-4 h-4" />
-                            Add Treatment
+                            <Plus className="w-5 h-5" />
+                            Add New Treatment
                         </Button>
                     </div>
                 </div>
 
-                {/* Add Treatment Form - Positioned at the top */}
+                {/* Enhanced Add Treatment Form with Step-by-Step Layout - MODAL */}
                 {showAddForm && (
-                    <Card className="border-l-4 border-l-green-500">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <FileText className="w-5 h-5" />
-                                Add New Treatment
-                            </CardTitle>
-                            <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mt-2">
-                                <p className="text-sm text-blue-800">
-                                    <strong>📝 Remember:</strong> Complete all fields with accurate information to ensure successful claim validation. 
-                                    Include detailed medical reports and proper cost breakdown for insurance purposes.
-                                </p>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">
-                                            Patient <span className="text-red-500">*</span>
-                                        </label>
-                                        <Select
-                                            value={formData.patientId}
-                                            onValueChange={(value) => setFormData(prev => ({ ...prev, patientId: value }))}
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                            <Card className="border-l-4 border-l-blue-500 shadow-none border-0">
+                                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 sticky top-0 z-10">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center gap-2">
+                                            <FileText className="w-5 h-5 text-blue-600" />
+                                            Add New Treatment Record
+                                        </CardTitle>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                resetForm()
+                                                setShowAddForm(false)
+                                            }}
+                                            className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-200"
                                         >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select patient" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {patients.map(patient => (
-                                                    <SelectItem key={patient.id} value={patient.id}>
-                                                        {patient.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            <XCircle className="h-5 w-5" />
+                                        </Button>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">
-                                            Treatment Date <span className="text-red-500">*</span>
-                                        </label>
-                                        <Input
-                                            type="date"
-                                            value={formData.date}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                                            required
-                                        />
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium mb-2">
-                                            Diagnosis <span className="text-red-500">*</span>
-                                        </label>
-                                        <Textarea
-                                            value={formData.diagnosis}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                                            placeholder="Enter detailed diagnosis with ICD codes if applicable..."
-                                            required
-                                            className="min-h-[80px]"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Include specific medical conditions and ICD codes for insurance compliance</p>
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium mb-2">
-                                            Treatment Details <span className="text-red-500">*</span>
-                                        </label>
-                                        <Textarea
-                                            value={formData.treatmentDetails}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, treatmentDetails: e.target.value }))}
-                                            placeholder="Enter comprehensive treatment information including procedures, medications, and protocols used..."
-                                            rows={4}
-                                            required
-                                            className="min-h-[100px]"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Detailed treatment description improves insurance claim approval rates</p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">
-                                            Total Treatment Cost ($) <span className="text-red-500">*</span>
-                                        </label>
-                                        <Input
-                                            type="number"
-                                            value={formData.cost}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, cost: e.target.value }))}
-                                            placeholder="0.00"
-                                            min="0"
-                                            step="0.01"
-                                            required
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Total should match sum of cost breakdown</p>
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium mb-2">Cost Breakdown (Required for Insurance)</label>
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                            <div>
-                                                <label className="block text-xs font-medium mb-1">Consultation ($)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={formData.costBreakdown.consultation}
-                                                    onChange={(e) => setFormData(prev => ({ 
-                                                        ...prev, 
-                                                        costBreakdown: { ...prev.costBreakdown, consultation: e.target.value }
-                                                    }))}
-                                                    placeholder="0.00"
-                                                    min="0"
-                                                    step="0.01"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium mb-1">Procedures ($)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={formData.costBreakdown.procedures}
-                                                    onChange={(e) => setFormData(prev => ({ 
-                                                        ...prev, 
-                                                        costBreakdown: { ...prev.costBreakdown, procedures: e.target.value }
-                                                    }))}
-                                                    placeholder="0.00"
-                                                    min="0"
-                                                    step="0.01"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium mb-1">Medication ($)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={formData.costBreakdown.medication}
-                                                    onChange={(e) => setFormData(prev => ({ 
-                                                        ...prev, 
-                                                        costBreakdown: { ...prev.costBreakdown, medication: e.target.value }
-                                                    }))}
-                                                    placeholder="0.00"
-                                                    min="0"
-                                                    step="0.01"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium mb-1">Equipment ($)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={formData.costBreakdown.equipment}
-                                                    onChange={(e) => setFormData(prev => ({ 
-                                                        ...prev, 
-                                                        costBreakdown: { ...prev.costBreakdown, equipment: e.target.value }
-                                                    }))}
-                                                    placeholder="0.00"
-                                                    min="0"
-                                                    step="0.01"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium mb-1">Other ($)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={formData.costBreakdown.other}
-                                                    onChange={(e) => setFormData(prev => ({ 
-                                                        ...prev, 
-                                                        costBreakdown: { ...prev.costBreakdown, other: e.target.value }
-                                                    }))}
-                                                    placeholder="0.00"
-                                                    min="0"
-                                                    step="0.01"
-                                                />
-                                            </div>
+                                    {/* Progress Steps */}
+                                    <div className="flex items-center justify-center mt-4">
+                                        <div className="flex items-center space-x-4">
+                                            {[1, 2, 3].map((step) => (
+                                                <div key={step} className="flex items-center">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${currentStep >= step
+                                                            ? 'bg-blue-600 text-white shadow-md'
+                                                            : 'bg-gray-200 text-gray-600'
+                                                        }`}>
+                                                        {currentStep > step ? (
+                                                            <CheckCircle className="w-5 h-5" />
+                                                        ) : (
+                                                            step
+                                                        )}
+                                                    </div>
+                                                    <span className={`ml-2 text-sm transition-colors duration-300 ${currentStep >= step ? 'text-blue-600 font-medium' : 'text-gray-500'
+                                                        }`}>
+                                                        {step === 1 && 'Patient & Basic Info'}
+                                                        {step === 2 && 'Treatment Details'}
+                                                        {step === 3 && 'Medical Reports'}
+                                                    </span>
+                                                    {step < 3 && (
+                                                        <div className={`w-16 h-0.5 ml-4 transition-colors duration-300 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-200'
+                                                            }`} />
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-2">Detailed cost breakdown improves insurance approval rates</p>
                                     </div>
 
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium mb-2">
-                                            Medical Reports <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors">
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    type="file"
-                                                    multiple
-                                                    accept=".pdf,.doc,.docx,.jpg,.png"
-                                                    onChange={handleFileUpload}
-                                                    className="flex-1"
-                                                />
-                                                <Upload className="w-4 h-4 text-gray-500" />
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-2">
-                                                Upload lab results, X-rays, prescriptions, and other medical documentation
-                                            </p>
-                                            {formData.medicalReports.length > 0 && (
-                                                <div className="mt-3 p-2 bg-green-50 rounded border border-green-200">
-                                                    <p className="text-sm font-medium text-green-700 mb-1">Uploaded files:</p>
-                                                    <ul className="text-sm text-green-600">
-                                                        {formData.medicalReports.map((file, index) => (
-                                                            <li key={index} className="flex items-center gap-1">
-                                                                <CheckCircle className="w-3 h-3" />
-                                                                {file}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
+                                    <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mt-4">
+                                        <p className="text-sm text-blue-800">
+                                            <strong>📝 Step {currentStep} of 3:</strong>
+                                            {currentStep === 1 && ' Start by selecting the patient and basic treatment information.'}
+                                            {currentStep === 2 && ' Provide detailed diagnosis, treatment description, and cost breakdown.'}
+                                            {currentStep === 3 && ' Upload medical reports and documents to complete the record.'}
+                                        </p>
+                                    </div>
+                                </CardHeader>
+
+                                <div className="max-h-[60vh] overflow-y-auto">
+                                    <CardContent className="p-6">
+                                        <form onSubmit={handleSubmit} className="space-y-6">
+                                            {/* Step 1: Patient & Basic Info */}
+                                            {currentStep === 1 && (
+                                                <div className="space-y-6 animate-in fade-in duration-300">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">
+                                                                Patient <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <Select
+                                                                value={formData.patientId}
+                                                                onValueChange={(value) => {
+                                                                    setFormData(prev => ({ ...prev, patientId: value }))
+                                                                    if (formErrors.patientId) {
+                                                                        setFormErrors(prev => ({ ...prev, patientId: '' }))
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <SelectTrigger className={`transition-colors ${formErrors.patientId ? 'border-red-500 error-field bg-red-50' : 'hover:border-blue-400'}`}>
+                                                                    <SelectValue placeholder="Select patient" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {patients.map(patient => (
+                                                                        <SelectItem key={patient.id} value={patient.id}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <User className="w-4 h-4" />
+                                                                                {patient.name}
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {formErrors.patientId && (
+                                                                <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.patientId}</p>
+                                                            )}
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">
+                                                                Treatment Date <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <Input
+                                                                type="date"
+                                                                value={formData.date}
+                                                                onChange={(e) => {
+                                                                    setFormData(prev => ({ ...prev, date: e.target.value }))
+                                                                    if (formErrors.date) {
+                                                                        setFormErrors(prev => ({ ...prev, date: '' }))
+                                                                    }
+                                                                }}
+                                                                className={`transition-colors ${formErrors.date ? 'border-red-500 error-field bg-red-50' : 'hover:border-blue-400'}`}
+                                                                max={new Date().toISOString().split('T')[0]}
+                                                            />
+                                                            {formErrors.date && (
+                                                                <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.date}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-end mb-6">
+                                                        <Button
+                                                            type="button"
+                                                            onClick={() => setCurrentStep(2)}
+                                                            disabled={!formData.patientId || !formData.date}
+                                                            className="flex items-center gap-2"
+                                                        >
+                                                            Next: Treatment Details
+                                                            <FileText className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             )}
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200">
-                                    <h4 className="font-medium text-yellow-800 mb-2">📋 Treatment Checklist for Insurance Validation:</h4>
-                                    <ul className="text-sm text-yellow-700 space-y-1">
-                                        <li>• Complete patient information and accurate diagnosis</li>
-                                        <li>• Detailed treatment description with medical necessity</li>
-                                        <li>• Accurate cost breakdown by category</li>
-                                        <li>• Upload all supporting medical documentation</li>
-                                        <li>• Follow standard medical protocols and guidelines</li>
-                                    </ul>
-                                </div>
+                                            {/* Step 2: Treatment Details */}
+                                            {currentStep === 2 && (
+                                                <div className="space-y-6 animate-in fade-in duration-300">
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-2">
+                                                            Diagnosis <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <Textarea
+                                                            value={formData.diagnosis}
+                                                            onChange={(e) => {
+                                                                setFormData(prev => ({ ...prev, diagnosis: e.target.value }))
+                                                                if (formErrors.diagnosis) {
+                                                                    setFormErrors(prev => ({ ...prev, diagnosis: '' }))
+                                                                }
+                                                            }}
+                                                            placeholder="Enter detailed diagnosis with ICD codes if applicable..."
+                                                            className={`min-h-[80px] transition-colors ${formErrors.diagnosis ? 'border-red-500 error-field bg-red-50' : 'hover:border-blue-400'}`}
+                                                        />
+                                                        {formErrors.diagnosis && (
+                                                            <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.diagnosis}</p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 mt-1">Include specific medical conditions and ICD codes for insurance compliance</p>
+                                                    </div>
 
-                                <div className="flex gap-2">
-                                    <Button type="submit">Save Treatment</Button>
-                                    <Button type="button" variant="outline" onClick={() => setShowAddForm(false)}>
-                                        Cancel
-                                    </Button>
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-2">
+                                                            Treatment Details <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <Textarea
+                                                            value={formData.treatmentDetails}
+                                                            onChange={(e) => {
+                                                                setFormData(prev => ({ ...prev, treatmentDetails: e.target.value }))
+                                                                if (formErrors.treatmentDetails) {
+                                                                    setFormErrors(prev => ({ ...prev, treatmentDetails: '' }))
+                                                                }
+                                                            }}
+                                                            placeholder="Enter comprehensive treatment information including procedures, medications, and protocols used..."
+                                                            rows={4}
+                                                            className={`min-h-[100px] transition-colors ${formErrors.treatmentDetails ? 'border-red-500 error-field bg-red-50' : 'hover:border-blue-400'}`}
+                                                        />
+                                                        {formErrors.treatmentDetails && (
+                                                            <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.treatmentDetails}</p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 mt-1">Detailed treatment description improves insurance claim approval rates</p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-2">
+                                                                Total Treatment Cost ($) <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <Input
+                                                                type="number"
+                                                                value={formData.cost}
+                                                                onChange={(e) => {
+                                                                    setFormData(prev => ({ ...prev, cost: e.target.value }))
+                                                                    if (formErrors.cost) {
+                                                                        setFormErrors(prev => ({ ...prev, cost: '' }))
+                                                                    }
+                                                                }}
+                                                                placeholder="0.00"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className={`transition-colors ${formErrors.cost ? 'border-red-500 error-field bg-red-50' : 'hover:border-blue-400'}`}
+                                                            />
+                                                            {formErrors.cost && (
+                                                                <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.cost}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-2">Cost Breakdown (Optional but Recommended)</label>
+                                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                                            {[
+                                                                { key: 'consultation', label: 'Consultation' },
+                                                                { key: 'procedures', label: 'Procedures' },
+                                                                { key: 'medication', label: 'Medication' },
+                                                                { key: 'equipment', label: 'Equipment' },
+                                                                { key: 'other', label: 'Other' }
+                                                            ].map(({ key, label }) => (
+                                                                <div key={key}>
+                                                                    <label className="block text-xs font-medium mb-1">{label} ($)</label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={formData.costBreakdown[key as keyof typeof formData.costBreakdown]}
+                                                                        onChange={(e) => setFormData(prev => ({
+                                                                            ...prev,
+                                                                            costBreakdown: { ...prev.costBreakdown, [key]: e.target.value }
+                                                                        }))}
+                                                                        placeholder="0.00"
+                                                                        min="0"
+                                                                        step="0.01"
+                                                                        className="hover:border-blue-400 transition-colors"
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        {formErrors.costBreakdown && (
+                                                            <p className="text-red-500 text-xs mt-2 animate-in slide-in-from-top-1 duration-200">{formErrors.costBreakdown}</p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 mt-2">Detailed cost breakdown improves insurance approval rates</p>
+                                                    </div>
+
+                                                    <div className="flex justify-between mb-6">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => setCurrentStep(1)}
+                                                            className="flex items-center gap-2"
+                                                        >
+                                                            <User className="w-4 h-4" />
+                                                            Back: Patient Info
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            onClick={() => setCurrentStep(3)}
+                                                            disabled={!formData.diagnosis.trim() || !formData.treatmentDetails.trim() || !formData.cost}
+                                                            className="flex items-center gap-2"
+                                                        >
+                                                            Next: Medical Reports
+                                                            <Upload className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Step 3: Medical Reports */}
+                                            {currentStep === 3 && (
+                                                <div className="space-y-6 animate-in fade-in duration-300">
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-2">
+                                                            Medical Reports <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <div className={`border-2 border-dashed rounded-lg p-6 hover:border-blue-400 transition-colors ${formErrors.medicalReports ? 'border-red-500 bg-red-50 error-field' : 'border-gray-300'
+                                                            }`}>
+                                                            <div className="text-center">
+                                                                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                                                <div className="space-y-2">
+                                                                    <Input
+                                                                        type="file"
+                                                                        multiple
+                                                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                                        onChange={handleFileUpload}
+                                                                        className="w-full"
+                                                                        id="file-upload"
+                                                                    />
+                                                                    <p className="text-sm text-gray-600">
+                                                                        Drag and drop files here or click to browse
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        Supported formats: PDF, DOC, DOCX, JPG, PNG (Max 10MB each)
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {formErrors.medicalReports && (
+                                                            <p className="text-red-500 text-xs mt-1 animate-in slide-in-from-top-1 duration-200">{formErrors.medicalReports}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Uploaded Reports Display */}
+                                                    {formData.medicalReports.length > 0 && (
+                                                        <div className="space-y-3">
+                                                            <h4 className="font-medium text-gray-900">Uploaded Reports ({formData.medicalReports.length})</h4>
+                                                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                                                                {formData.medicalReports.map((report, index) => (
+                                                                    <div key={report.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="flex items-center gap-1">
+                                                                                {report.status === 'uploaded' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                                                                                {report.status === 'pending' && <Clock className="w-4 h-4 text-yellow-600" />}
+                                                                                {report.status === 'processing' && <Settings className="w-4 h-4 text-blue-600 animate-spin" />}
+                                                                                {report.status === 'verified' && <CheckCircle className="w-4 h-4 text-emerald-600" />}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="font-medium text-sm">{report.fileName}</p>
+                                                                                <div className="flex items-center gap-2 mt-1">
+                                                                                    <Badge
+                                                                                        variant={
+                                                                                            report.status === 'verified' ? 'success' :
+                                                                                                report.status === 'uploaded' ? 'default' :
+                                                                                                    report.status === 'pending' ? 'secondary' : 'default'
+                                                                                        }
+                                                                                        className="text-xs"
+                                                                                    >
+                                                                                        {report.status}
+                                                                                    </Badge>
+                                                                                    <Badge variant="outline" className="text-xs">
+                                                                                        {report.type.replace('_', ' ')}
+                                                                                    </Badge>
+                                                                                    <span className="text-xs text-gray-500">{report.uploadDate}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            {report.status === 'pending' && (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    onClick={() => updateFormReportStatus(report.id, 'uploaded')}
+                                                                                    className="text-xs hover:bg-green-50"
+                                                                                >
+                                                                                    Mark Uploaded
+                                                                                </Button>
+                                                                            )}
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={() => removeReport(report.id)}
+                                                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                                                            >
+                                                                                <XCircle className="w-4 h-4" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Treatment Summary */}
+                                                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                                        <h4 className="font-medium text-blue-800 mb-3">📋 Treatment Summary</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                            <div>
+                                                                <p><strong>Patient:</strong> {patients.find(p => p.id === formData.patientId)?.name || 'Not selected'}</p>
+                                                                <p><strong>Date:</strong> {formData.date}</p>
+                                                                <p><strong>Cost:</strong> ${formData.cost}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p><strong>Diagnosis:</strong> {formData.diagnosis.substring(0, 50)}{formData.diagnosis.length > 50 ? '...' : ''}</p>
+                                                                <p><strong>Reports:</strong> {formData.medicalReports.length} files</p>
+                                                                <p><strong>Ready to Submit:</strong> {formData.medicalReports.filter(r => r.status === 'uploaded' || r.status === 'verified').length} files</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Navigation and Submit */}
+                                                    <div className="flex justify-between mb-6">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => setCurrentStep(2)}
+                                                            className="flex items-center gap-2"
+                                                        >
+                                                            <FileText className="w-4 h-4" />
+                                                            Back: Treatment Details
+                                                        </Button>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    resetForm()
+                                                                    setShowAddForm(false)
+                                                                }}
+                                                                disabled={isSubmitting}
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={isSubmitting || formData.medicalReports.length === 0}
+                                                                className="flex items-center gap-2 min-w-[120px]"
+                                                            >
+                                                                {isSubmitting ? (
+                                                                    <>
+                                                                        <Settings className="w-4 h-4 animate-spin" />
+                                                                        Saving...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <CheckCircle className="w-4 h-4" />
+                                                                        Save Treatment
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </form>
+                                    </CardContent>
                                 </div>
-                            </form>
-                        </CardContent>
-                    </Card>
+                            </Card>
+                        </div>
+                    </div>
                 )}
 
                 {/* Notifications Panel */}
-                {showNotifications && (
+                {activeSection === 'notifications' && (
                     <Card className="border-l-4 border-l-red-500 bg-red-50/30">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-red-700">
-                                <Bell className="w-5 h-5" />
-                                Priority Alerts & Notifications
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2 text-red-700">
+                                    <Bell className="w-5 h-5" />
+                                    Priority Alerts & Notifications
+                                </CardTitle>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveSection(null)}
+                                    className="h-6 w-6 p-0 text-red-700 hover:text-red-900 hover:bg-red-100"
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
@@ -595,7 +963,7 @@ export function DoctorView() {
                 )}
 
                 {/* Analytics Dashboard */}
-                {showAnalytics && (
+                {activeSection === 'analytics' && (
                     <Card className="border-l-4 border-l-blue-500">
                         <CardHeader>
                             <div className="flex justify-between items-center">
@@ -603,17 +971,27 @@ export function DoctorView() {
                                     <BarChart3 className="w-5 h-5 text-blue-600" />
                                     Practice Analytics & Insights
                                 </CardTitle>
-                                <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
-                                    <SelectTrigger className="w-32">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="week">This Week</SelectItem>
-                                        <SelectItem value="month">This Month</SelectItem>
-                                        <SelectItem value="quarter">This Quarter</SelectItem>
-                                        <SelectItem value="year">This Year</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex items-center gap-2">
+                                    <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
+                                        <SelectTrigger className="w-32">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="week">This Week</SelectItem>
+                                            <SelectItem value="month">This Month</SelectItem>
+                                            <SelectItem value="quarter">This Quarter</SelectItem>
+                                            <SelectItem value="year">This Year</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setActiveSection(null)}
+                                        className="h-6 w-6 p-0 text-blue-600 hover:text-blue-900 hover:bg-blue-100"
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -698,13 +1076,23 @@ export function DoctorView() {
                 )}
 
                 {/* Quick Notes Panel */}
-                {showQuickNotes && (
+                {activeSection === 'quickNotes' && (
                     <Card className="border-l-4 border-l-green-500">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <MessageSquare className="w-5 h-5 text-green-600" />
-                                Quick Notes & Reminders
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <MessageSquare className="w-5 h-5 text-green-600" />
+                                    Quick Notes & Reminders
+                                </CardTitle>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveSection(null)}
+                                    className="h-6 w-6 p-0 text-green-600 hover:text-green-900 hover:bg-green-100"
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
@@ -716,7 +1104,7 @@ export function DoctorView() {
                                     className="w-full"
                                 />
                                 <div className="flex gap-2">
-                                    <Button 
+                                    <Button
                                         size="sm"
                                         onClick={() => {
                                             // Save notes (in a real app, this would persist to storage)
@@ -725,8 +1113,8 @@ export function DoctorView() {
                                     >
                                         Save Notes
                                     </Button>
-                                    <Button 
-                                        size="sm" 
+                                    <Button
+                                        size="sm"
                                         variant="outline"
                                         onClick={() => setQuickNotes('')}
                                     >
@@ -748,13 +1136,23 @@ export function DoctorView() {
                 )}
 
                 {/* Appointment Scheduler */}
-                {showAppointments && (
+                {activeSection === 'appointments' && (
                     <Card className="border-l-4 border-l-purple-500">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Calendar className="w-5 h-5 text-purple-600" />
-                                Today's Schedule & Appointments
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-purple-600" />
+                                    Today's Schedule & Appointments
+                                </CardTitle>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveSection(null)}
+                                    className="h-6 w-6 p-0 text-purple-600 hover:text-purple-900 hover:bg-purple-100"
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -990,7 +1388,7 @@ export function DoctorView() {
                         </CardTitle>
                         <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mt-2">
                             <p className="text-sm text-blue-800">
-                                <strong>⚖️ Important:</strong> This certification confirms that the treatment meets insurance standards 
+                                <strong>⚖️ Important:</strong> This certification confirms that the treatment meets insurance standards
                                 and medical necessity requirements. Your decision affects claim approval.
                             </p>
                         </div>
@@ -1024,9 +1422,9 @@ export function DoctorView() {
                                 </label>
                                 <Select
                                     value={validationData.isValid ? 'valid' : 'invalid'}
-                                    onValueChange={(value) => setValidationData(prev => ({ 
-                                        ...prev, 
-                                        isValid: value === 'valid' 
+                                    onValueChange={(value) => setValidationData(prev => ({
+                                        ...prev,
+                                        isValid: value === 'valid'
                                     }))}
                                 >
                                     <SelectTrigger className={validationData.isValid ? 'border-green-300' : 'border-red-300'}>
@@ -1075,7 +1473,7 @@ export function DoctorView() {
                                 <div className="bg-green-50 p-4 rounded-md border border-green-200">
                                     <h4 className="font-medium text-green-800 mb-2">✅ Validating Treatment as Insurance-Eligible</h4>
                                     <p className="text-sm text-green-700">
-                                        This treatment will be marked as valid for insurance claims, 
+                                        This treatment will be marked as valid for insurance claims,
                                         improving the patient's chance of claim approval.
                                     </p>
                                 </div>
@@ -1085,7 +1483,7 @@ export function DoctorView() {
                                 <div className="bg-red-50 p-4 rounded-md border border-red-200">
                                     <h4 className="font-medium text-red-800 mb-2">❌ Marking Treatment as Not Insurance-Eligible</h4>
                                     <p className="text-sm text-red-700">
-                                        This treatment will be marked as invalid for insurance claims. 
+                                        This treatment will be marked as invalid for insurance claims.
                                         Patients should be informed about self-pay options.
                                     </p>
                                 </div>
@@ -1144,9 +1542,8 @@ export function DoctorView() {
                                         <div>
                                             <h4 className="font-medium text-gray-900 mb-1">Status</h4>
                                             <Badge variant={
-                                                treatment.status === 'submitted' ? 'success' : 
-                                                treatment.status === 'discharged' ? 'info' : 
-                                                'pending'
+                                                treatment.status === 'submitted' ? 'success' :
+                                                    'default'
                                             }>
                                                 {treatment.status}
                                             </Badge>
@@ -1180,7 +1577,7 @@ export function DoctorView() {
                                                 <span className="text-xl font-bold text-blue-700">${treatment.cost}</span>
                                                 <span className="text-sm text-blue-600">Total Cost</span>
                                             </div>
-                                            
+
                                             {treatment.costBreakdown && (
                                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                                                     <div className="text-center">
@@ -1212,15 +1609,43 @@ export function DoctorView() {
                                     {treatment.medicalReports && treatment.medicalReports.length > 0 && (
                                         <div>
                                             <h4 className="font-medium text-gray-900 mb-2">Medical Reports</h4>
-                                            <div className="bg-green-50 p-3 rounded-md border border-green-200">
-                                                <ul className="space-y-1">
-                                                    {treatment.medicalReports.map((report, index) => (
-                                                        <li key={index} className="flex items-center gap-2 text-green-700">
-                                                            <CheckCircle className="w-4 h-4" />
-                                                            {report}
-                                                        </li>
-                                                    ))}
-                                                </ul>
+                                            <div className="space-y-2">
+                                                {treatment.medicalReports.map((report, index) => (
+                                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex items-center gap-1">
+                                                                {report.status === 'uploaded' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                                                                {report.status === 'pending' && <Clock className="w-4 h-4 text-yellow-600" />}
+                                                                {report.status === 'processing' && <Settings className="w-4 h-4 text-blue-600 animate-spin" />}
+                                                                {report.status === 'verified' && <CheckCircle className="w-4 h-4 text-emerald-600" />}
+                                                            </div>
+                                                            <span className="font-medium">{report.fileName}</span>
+                                                            <div className="flex gap-1">
+                                                                <Badge
+                                                                    variant={
+                                                                        report.status === 'verified' ? 'success' :
+                                                                            report.status === 'uploaded' ? 'default' :
+                                                                                report.status === 'pending' ? 'secondary' : 'default'
+                                                                    }
+                                                                    className="text-xs"
+                                                                >
+                                                                    {report.status}
+                                                                </Badge>
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {report.type.replace('_', ' ')}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-xs text-gray-500">{report.uploadDate}</p>
+                                                            {report.notes && (
+                                                                <p className="text-xs text-gray-400" title={report.notes}>
+                                                                    {report.notes.length > 30 ? `${report.notes.substring(0, 30)}...` : report.notes}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
@@ -1239,11 +1664,10 @@ export function DoctorView() {
                                     {treatment.validatedForClaim !== undefined && (
                                         <div>
                                             <h4 className="font-medium text-gray-900 mb-2">Insurance Validation</h4>
-                                            <div className={`p-3 rounded-md border ${
-                                                treatment.validatedForClaim 
-                                                    ? 'bg-green-50 border-green-200' 
-                                                    : 'bg-red-50 border-red-200'
-                                            }`}>
+                                            <div className={`p-3 rounded-md border ${treatment.validatedForClaim
+                                                ? 'bg-green-50 border-green-200'
+                                                : 'bg-red-50 border-red-200'
+                                                }`}>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     {treatment.validatedForClaim ? (
                                                         <CheckCircle className="w-5 h-5 text-green-600" />
@@ -1255,9 +1679,8 @@ export function DoctorView() {
                                                     </Badge>
                                                 </div>
                                                 {treatment.validationNotes && (
-                                                    <p className={`text-sm ${
-                                                        treatment.validatedForClaim ? 'text-green-700' : 'text-red-700'
-                                                    }`}>
+                                                    <p className={`text-sm ${treatment.validatedForClaim ? 'text-green-700' : 'text-red-700'
+                                                        }`}>
                                                         {treatment.validationNotes}
                                                     </p>
                                                 )}
@@ -1344,7 +1767,7 @@ export function DoctorView() {
                                     </Badge>
                                 </div>
                             </div>
-                            
+
                             {/* Search and Filter Controls */}
                             <div className="flex flex-col md:flex-row gap-4 mt-4">
                                 <div className="flex-1">
@@ -1423,82 +1846,108 @@ export function DoctorView() {
                                     )}
                                 </div>
                             ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Patient</TableHead>
-                                            <TableHead>Diagnosis</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Cost</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredTreatments.map(treatment => (
-                                            <TableRow key={treatment.id} className="hover:bg-gray-50">
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center gap-2">
-                                                        <Button
-                                                            variant="link"
-                                                            className="p-0 h-auto text-blue-600 hover:text-blue-800 underline font-medium"
-                                                            onClick={() => handleViewTreatmentDetails(treatment.id)}
-                                                        >
-                                                            {treatment.patientName}
-                                                        </Button>
-                                                        <Badge variant="outline" className="text-xs">
-                                                            #{treatment.patientId}
+                                <div className="space-y-4">
+                                    {filteredTreatments.map(treatment => (
+                                        <Card key={treatment.id} className="hover:shadow-md transition-shadow duration-200">
+                                            <CardContent className="p-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                                                    {/* Patient Info */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <User className="w-4 h-4 text-blue-600" />
+                                                            <Button
+                                                                variant="link"
+                                                                className="p-0 h-auto text-blue-600 hover:text-blue-800 font-semibold text-left"
+                                                                onClick={() => handleViewTreatmentDetails(treatment.id)}
+                                                            >
+                                                                {treatment.patientName}
+                                                            </Button>
+                                                        </div>
+                                                        <Badge variant="outline" className="text-xs w-fit">
+                                                            ID: {treatment.patientId}
                                                         </Badge>
                                                     </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="max-w-xs">
-                                                        <p className="truncate" title={treatment.diagnosis}>
-                                                            {treatment.diagnosis}
-                                                        </p>
+
+                                                    {/* Treatment Info */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-start gap-2">
+                                                            <Stethoscope className="w-4 h-4 text-green-600 mt-0.5" />
+                                                            <div>
+                                                                <p className="font-medium text-sm">{treatment.diagnosis}</p>
+                                                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                                                                    <CalendarDays className="w-3 h-3" />
+                                                                    {treatment.date}
+                                                                </div>
+                                                                {/* Medical Reports Summary */}
+                                                                {treatment.medicalReports && treatment.medicalReports.length > 0 && (
+                                                                    <div className="flex items-center gap-1 text-xs mt-1">
+                                                                        <FileText className="w-3 h-3 text-blue-500" />
+                                                                        <span className="text-blue-600">{treatment.medicalReports.length} reports</span>
+                                                                        <span className="text-gray-400">•</span>
+                                                                        <span className="text-green-600">
+                                                                            {treatment.medicalReports.filter(r => r.status === 'verified' || r.status === 'uploaded').length} ready
+                                                                        </span>
+                                                                        {treatment.medicalReports.some(r => r.status === 'pending') && (
+                                                                            <>
+                                                                                <span className="text-gray-400">•</span>
+                                                                                <span className="text-yellow-600">
+                                                                                    {treatment.medicalReports.filter(r => r.status === 'pending').length} pending
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </TableCell>
-                                                <TableCell className="flex items-center gap-2">
-                                                    <CalendarDays className="w-4 h-4" />
-                                                    {treatment.date}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <DollarSign className="w-4 h-4" />
-                                                        ${treatment.cost}
-                                                        {treatment.costBreakdown && (
+
+                                                    {/* Cost & Status */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <DollarSign className="w-4 h-4 text-emerald-600" />
+                                                            <span className="font-semibold text-emerald-700">${treatment.cost}</span>
+                                                            {treatment.costBreakdown && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+                                                                    onClick={() => {
+                                                                        const breakdown = treatment.costBreakdown!
+                                                                        alert(`Cost Breakdown:\nConsultation: $${breakdown.consultation}\nProcedures: $${breakdown.procedures}\nMedication: $${breakdown.medication}\nEquipment: $${breakdown.equipment}\nOther: $${breakdown.other}`)
+                                                                    }}
+                                                                >
+                                                                    <Receipt className="w-3 h-3" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                        <Badge
+                                                            variant={treatment.status === 'submitted' ? 'success' : 'default'}
+                                                            className="w-fit"
+                                                        >
+                                                            {treatment.status.charAt(0).toUpperCase() + treatment.status.slice(1)}
+                                                        </Badge>
+                                                    </div>
+
+                                                    {/* Actions */}
+                                                    <div className="flex gap-2 md:justify-end flex-wrap">
+                                                        {treatment.medicalReports && treatment.medicalReports.length > 0 && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                className="h-6 px-2 text-xs"
-                                                                onClick={() => {
-                                                                    const breakdown = treatment.costBreakdown!
-                                                                    alert(`Cost Breakdown:\nConsultation: $${breakdown.consultation}\nProcedures: $${breakdown.procedures}\nMedication: $${breakdown.medication}\nEquipment: $${breakdown.equipment}\nOther: $${breakdown.other}`)
-                                                                }}
+                                                                onClick={() => handleViewTreatmentDetails(treatment.id)}
+                                                                className="flex items-center gap-1 border-blue-500 text-blue-600 hover:bg-blue-50"
                                                             >
-                                                                <Receipt className="w-3 h-3" />
+                                                                <FileText className="w-3 h-3" />
+                                                                Reports
                                                             </Button>
                                                         )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant={
-                                                        treatment.status === 'submitted' ? 'success' : 
-                                                        treatment.status === 'discharged' ? 'info' : 
-                                                        'pending'
-                                                    }>
-                                                        {treatment.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-1">
                                                         {treatment.status === 'pending' && (
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSubmitTreatment(treatment.id)}
-                                                                className="flex items-center gap-2"
+                                                                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700"
                                                             >
-                                                                <Send className="w-4 h-4" />
+                                                                <Send className="w-3 h-3" />
                                                                 Submit
                                                             </Button>
                                                         )}
@@ -1510,9 +1959,9 @@ export function DoctorView() {
                                                                     setSelectedTreatment(treatment.id)
                                                                     setShowDischargeForm(true)
                                                                 }}
-                                                                className="flex items-center gap-2"
+                                                                className="flex items-center gap-1 border-green-600 text-green-600 hover:bg-green-50"
                                                             >
-                                                                <FileCheck className="w-4 h-4" />
+                                                                <FileCheck className="w-3 h-3" />
                                                                 Discharge
                                                             </Button>
                                                         )}
@@ -1524,18 +1973,18 @@ export function DoctorView() {
                                                                     setSelectedTreatment(treatment.id)
                                                                     setShowValidationForm(true)
                                                                 }}
-                                                                className="flex items-center gap-2"
+                                                                className="flex items-center gap-1 border-purple-600 text-purple-600 hover:bg-purple-50"
                                                             >
-                                                                <CheckCircle className="w-4 h-4" />
+                                                                <CheckCircle className="w-3 h-3" />
                                                                 Validate
                                                             </Button>
                                                         )}
                                                     </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
                             )}
                         </CardContent>
                     </Card>
@@ -1580,8 +2029,8 @@ export function DoctorView() {
                                                         {claim.status === 'pending' && <div className="w-4 h-4 rounded-full bg-yellow-500" />}
                                                         <Badge variant={
                                                             claim.status === 'approved' ? 'default' :
-                                                            claim.status === 'rejected' ? 'destructive' :
-                                                            'secondary'
+                                                                claim.status === 'rejected' ? 'destructive' :
+                                                                    'secondary'
                                                         }>
                                                             {claim.status}
                                                         </Badge>

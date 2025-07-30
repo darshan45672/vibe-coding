@@ -1,5 +1,14 @@
 import { create } from 'zustand'
 
+export interface MedicalReport {
+    id: string
+    fileName: string
+    uploadDate: string
+    status: 'uploaded' | 'pending' | 'processing' | 'verified'
+    type: 'lab_result' | 'xray' | 'prescription' | 'scan' | 'document' | 'other'
+    notes?: string
+}
+
 export interface Treatment {
     id: string
     doctorId: string
@@ -9,8 +18,19 @@ export interface Treatment {
     diagnosis: string
     treatmentDetails?: string
     cost: number
+    costBreakdown?: {
+        consultation: number
+        procedures: number
+        medication: number
+        equipment: number
+        other: number
+    }
     date: string
     status: 'pending' | 'submitted'
+    medicalReports?: MedicalReport[]
+    dischargeSummary?: string
+    validatedForClaim?: boolean
+    validationNotes?: string
 }
 
 export interface Appointment {
@@ -74,6 +94,8 @@ interface AppState {
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     updateTreatment: (treatmentId: string, updates: Partial<Treatment>) => void
     submitTreatment: (treatmentId: string) => void
+    addDischargeSummary: (treatmentId: string, summary: string) => void
+    validateTreatmentForClaim: (treatmentId: string, isValid: boolean, notes?: string) => void
     addAppointment: (appointment: Omit<Appointment, 'id' | 'status' | 'bookedDate'>) => void
     updateAppointment: (appointmentId: string, updates: Partial<Omit<Appointment, 'id' | 'bookedDate'>>) => void
     deleteAppointment: (appointmentId: string) => void
@@ -117,7 +139,24 @@ const dummyTreatments: Treatment[] = [
         },
         date: '2025-07-25',
         status: 'submitted',
-        medicalReports: ['blood_test_results.pdf', 'physical_exam_report.pdf'],
+        medicalReports: [
+            {
+                id: '1',
+                fileName: 'blood_test_results.pdf',
+                uploadDate: '2025-07-25',
+                status: 'verified',
+                type: 'lab_result',
+                notes: 'Complete blood panel - all values within normal range'
+            },
+            {
+                id: '2',
+                fileName: 'physical_exam_report.pdf',
+                uploadDate: '2025-07-25',
+                status: 'uploaded',
+                type: 'document',
+                notes: 'Physical examination findings documented'
+            }
+        ],
         validatedForClaim: true,
         validationNotes: 'All procedures completed successfully and documented properly.'
     },
@@ -347,6 +386,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         set(state => ({
             treatments: state.treatments.map(t =>
                 t.id === treatmentId ? { ...t, status: 'submitted' } : t
+            )
+        }))
+    },
+
+    updateTreatment: (treatmentId, updates) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? { ...t, ...updates } : t
+            )
+        }))
+    },
+
+    addDischargeSummary: (treatmentId, summary) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? { ...t, dischargeSummary: summary } : t
+            )
+        }))
+    },
+
+    validateTreatmentForClaim: (treatmentId, isValid, notes) => {
+        set(state => ({
+            treatments: state.treatments.map(t =>
+                t.id === treatmentId ? {
+                    ...t,
+                    validatedForClaim: isValid,
+                    validationNotes: notes
+                } : t
             )
         }))
     },
