@@ -1,0 +1,16 @@
+# Ignore patterns for Prettier
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.git/
+*.log
+*.lock
+package-lock.json
+yarn.lock
+.env*
+!.env.example
+*.min.js
+*.min.css

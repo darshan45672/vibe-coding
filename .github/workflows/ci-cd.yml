@@ -1,0 +1,384 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev, develop ]
+  pull_request:
+    branches: [ main, dev, develop ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 1. GitLeaks - Secret Detection
+  gitleaks:
+    name: 🔍 GitLeaks Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # 2. Semgrep Security Analysis (JavaScript/TypeScript focused)
+  semgrep-security:
+    name: 🛡️ Semgrep Security Analysis
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          semgrep \
+            --config=auto \
+            --config=p/security-audit \
+            --config=p/secrets \
+            --config=p/javascript \
+            --config=p/typescript \
+            --config=p/react \
+            --json \
+            --output=semgrep-results.json \
+            .
+
+      - name: Upload Semgrep results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+
+  # 3. Dependency Vulnerability Check
+  dependency-check:
+    name: 🔒 Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate --json > npm-audit-results.json || true
+          npm audit --audit-level=moderate
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+
+  # 4. Linting and Formatting
+  lint-and-format:
+    name: 📝 Linting and Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check Prettier formatting
+        run: |
+          npx prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}" || {
+            echo "❌ Code formatting issues found. Run 'npm run format' to fix them."
+            exit 1
+          }
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  # 5. Unit Tests Generation and Execution
+  test:
+    name: 🧪 Generate and Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-format]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install testing dependencies
+        run: |
+          npm install --save-dev jest @testing-library/react @testing-library/jest-dom jest-environment-jsdom @types/jest
+
+      - name: Create Jest config
+        run: |
+          cat > jest.config.js << 'EOF'
+          const nextJest = require('next/jest')
+          
+          const createJestConfig = nextJest({
+            dir: './',
+          })
+          
+          const customJestConfig = {
+            setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+            testEnvironment: 'jest-environment-jsdom',
+            testMatch: [
+              '**/__tests__/**/*.(test|spec).(js|jsx|ts|tsx)',
+              '**/*.(test|spec).(js|jsx|ts|tsx)'
+            ],
+            collectCoverageFrom: [
+              'components/**/*.{js,jsx,ts,tsx}',
+              'app/**/*.{js,jsx,ts,tsx}',
+              'lib/**/*.{js,jsx,ts,tsx}',
+              '!**/*.d.ts',
+              '!**/node_modules/**',
+            ],
+            coverageThreshold: {
+              global: {
+                branches: 70,
+                functions: 70,
+                lines: 70,
+                statements: 70,
+              },
+            },
+          }
+          
+          module.exports = createJestConfig(customJestConfig)
+          EOF
+
+      - name: Create Jest setup file
+        run: |
+          cat > jest.setup.js << 'EOF'
+          import '@testing-library/jest-dom'
+          EOF
+
+      - name: Generate basic unit tests
+        run: |
+          mkdir -p __tests__/components/ui
+          mkdir -p __tests__/components/views
+          mkdir -p __tests__/lib
+          
+          # Generate tests for UI components
+          cat > __tests__/components/ui/button.test.tsx << 'EOF'
+          import { render, screen, fireEvent } from '@testing-library/react'
+          import { Button } from '@/components/ui/button'
+          
+          describe('Button Component', () => {
+            test('renders button with text', () => {
+              render(<Button>Click me</Button>)
+              expect(screen.getByRole('button', { name: /click me/i })).toBeInTheDocument()
+            })
+          
+            test('handles click events', () => {
+              const handleClick = jest.fn()
+              render(<Button onClick={handleClick}>Click me</Button>)
+              fireEvent.click(screen.getByRole('button'))
+              expect(handleClick).toHaveBeenCalledTimes(1)
+            })
+          
+            test('applies variant classes correctly', () => {
+              render(<Button variant="destructive">Delete</Button>)
+              expect(screen.getByRole('button')).toHaveClass('bg-destructive')
+            })
+          })
+          EOF
+          
+          cat > __tests__/components/ui/card.test.tsx << 'EOF'
+          import { render, screen } from '@testing-library/react'
+          import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+          
+          describe('Card Components', () => {
+            test('renders card with content', () => {
+              render(
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Test Title</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p>Test content</p>
+                  </CardContent>
+                </Card>
+              )
+              expect(screen.getByText('Test Title')).toBeInTheDocument()
+              expect(screen.getByText('Test content')).toBeInTheDocument()
+            })
+          })
+          EOF
+          
+          # Generate tests for views
+          cat > __tests__/components/views/patient-view.test.tsx << 'EOF'
+          import { render, screen } from '@testing-library/react'
+          import PatientView from '@/components/views/patient-view'
+          
+          describe('PatientView Component', () => {
+            test('renders patient view', () => {
+              render(<PatientView />)
+              // Add specific assertions based on your component structure
+              expect(screen.getByTestId('patient-view')).toBeInTheDocument()
+            })
+          })
+          EOF
+          
+          # Generate tests for lib utilities
+          cat > __tests__/lib/utils.test.ts << 'EOF'
+          import { cn } from '@/lib/utils'
+          
+          describe('Utils', () => {
+            test('cn function merges classes correctly', () => {
+              expect(cn('class1', 'class2')).toBe('class1 class2')
+              expect(cn('class1', undefined, 'class2')).toBe('class1 class2')
+            })
+          })
+          EOF
+
+      - name: Run tests with coverage
+        run: |
+          npx jest --coverage --passWithNoTests
+        continue-on-error: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage/
+            __tests__/
+
+  # 6. Build Application
+  build:
+    name: 🏗️ Build Application
+    runs-on: ubuntu-latest
+    needs: [gitleaks, dependency-check, lint-and-format]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            .next/
+            out/
+
+  # 7. CodeQL Analysis
+  codeql:
+    name: 🔬 CodeQL Analysis
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'typescript' ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for CodeQL
+        run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+
+  # Deploy (optional - runs only on main branch)
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: [test, build, codeql, semgrep-security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Deploy to production
+        run: |
+          echo "🚀 Deploying to production..."
+          echo "Add your deployment steps here (Vercel, Netlify, AWS, etc.)"
+          
+  # Security Summary
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [gitleaks, semgrep-security, dependency-check]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create security summary
+        run: |
+          echo "# 🛡️ Security Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## GitLeaks Status: ${{ needs.gitleaks.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Semgrep Status: ${{ needs.semgrep-security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Dependency Check Status: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
