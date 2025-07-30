@@ -32,7 +32,7 @@ export interface Payment {
     id: string
     claimId: string
     amount: number
-    status: 'initiated' | 'completed'
+    status: 'pending' | 'initiated' | 'completed' | 'rejected'
     initiatedDate: string
     completedDate?: string
     bankNotes?: string
@@ -64,6 +64,7 @@ interface AppState {
     reviewClaim: (claimId: string, status: 'approved' | 'rejected', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
     completePayment: (paymentId: string, notes?: string) => void
+    rejectPayment: (paymentId: string, notes?: string) => void
 }
 
 // Dummy data
@@ -229,6 +230,13 @@ const dummyPayments: Payment[] = [
         initiatedDate: '2025-07-27',
         completedDate: '2025-07-28',
         bankNotes: 'Payment processed successfully to patient account'
+    },
+    {
+        id: '2',
+        claimId: '1',
+        amount: 360, // 80% coverage for a $450 claim
+        status: 'pending',
+        initiatedDate: '2025-07-30'
     }
 ]
 
@@ -315,7 +323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     id: Date.now().toString(),
                     claimId,
                     amount: Math.floor(claim.cost * 0.8), // 80% coverage
-                    status: 'initiated',
+                    status: 'pending',
                     initiatedDate: new Date().toISOString().split('T')[0]
                 }
                 set(state => ({ payments: [...state.payments, payment] }))
@@ -327,7 +335,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const newPayment: Payment = {
             ...payment,
             id: Date.now().toString(),
-            status: 'initiated',
+            status: 'pending',
             initiatedDate: new Date().toISOString().split('T')[0]
         }
         set(state => ({ payments: [...state.payments, newPayment] }))
@@ -340,6 +348,21 @@ export const useAppStore = create<AppState>((set, get) => ({
                     ? {
                         ...p,
                         status: 'completed',
+                        completedDate: new Date().toISOString().split('T')[0],
+                        bankNotes: notes
+                    }
+                    : p
+            )
+        }))
+    },
+
+    rejectPayment: (paymentId, notes) => {
+        set(state => ({
+            payments: state.payments.map(p =>
+                p.id === paymentId
+                    ? {
+                        ...p,
+                        status: 'rejected',
                         completedDate: new Date().toISOString().split('T')[0],
                         bankNotes: notes
                     }
