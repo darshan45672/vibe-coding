@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, XCircle, MoreHorizontal, Eye } from 'lucide-react'
 
 export function BankView() {
     const { claims, payments, completePayment, rejectPayment } = useAppStore()
     const [selectedPayment, setSelectedPayment] = useState<string | null>(null)
     const [processingNotes, setProcessingNotes] = useState('')
     const [paymentActions, setPaymentActions] = useState<Record<string, string>>({})
+    const [viewingPayment, setViewingPayment] = useState<string | null>(null)
 
     const pendingPayments = payments.filter(p => p.status === 'pending')
     const completedPayments = payments.filter(p => p.status === 'completed')
@@ -102,7 +104,7 @@ export function BankView() {
                                     <TableHead>Claim ID</TableHead>
                                     <TableHead>Patient</TableHead>
                                     <TableHead>Amount</TableHead>
-                                    <TableHead>Initiated</TableHead>
+                                    {/* <TableHead>Initiated</TableHead> */}
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -124,45 +126,41 @@ export function BankView() {
                                                 {payment.initiatedDate}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="secondary" className="text-yellow-600 bg-yellow-100">
-                                                    Pending
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Select
-                                                        value={selectedAction || ""}
-                                                        onValueChange={(value) => handlePaymentAction(payment.id, value)}
-                                                    >
-                                                        <SelectTrigger className="w-32">
-                                                            <SelectValue placeholder="Select action" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="pay">Pay</SelectItem>
-                                                            <SelectItem value="reject">Reject</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {selectedAction && (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => setSelectedPayment(payment.id)}
-                                                            className="flex items-center gap-2"
-                                                            variant={selectedAction === 'pay' ? 'default' : 'destructive'}
-                                                        >
-                                                            {selectedAction === 'pay' ? (
-                                                                <>
-                                                                    <CheckCircle className="w-4 h-4" />
-                                                                    Process
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <XCircle className="w-4 h-4" />
-                                                                    Reject
-                                                                </>
-                                                            )}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
                                                         </Button>
-                                                    )}
-                                                </div>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => setSelectedPayment(payment.id)}>
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            View Details
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem 
+                                                            onClick={() => {
+                                                                handlePaymentAction(payment.id, 'pay')
+                                                                setSelectedPayment(payment.id)
+                                                            }}
+                                                            className="text-green-600 focus:text-green-600"
+                                                        >
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Process Payment
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem 
+                                                            onClick={() => {
+                                                                handlePaymentAction(payment.id, 'reject')
+                                                                setSelectedPayment(payment.id)
+                                                            }}
+                                                            className="text-red-600 focus:text-red-600"
+                                                        >
+                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                            Reject Payment
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     )
@@ -303,8 +301,7 @@ export function BankView() {
                                     <TableHead>Amount</TableHead>
                                     <TableHead>Initiated</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead>Completed</TableHead>
-                                    <TableHead>Notes</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -354,9 +351,20 @@ export function BankView() {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {payment.bankNotes && (
-                                                    <p className="text-sm text-gray-600">{payment.bankNotes}</p>
-                                                )}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => setViewingPayment(payment.id)}>
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            View Details
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     )
@@ -366,6 +374,137 @@ export function BankView() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* View Payment Details Modal */}
+            {viewingPayment && (() => {
+                const payment = [...pendingPayments, ...getAllProcessedPayments()].find(p => p.id === viewingPayment)
+                const claimDetails = payment ? getPaymentDetails(payment.claimId) : null
+                
+                if (!payment || !claimDetails) return null
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+                            <Card className="border-0 shadow-none">
+                                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="flex items-center gap-2">
+                                            <CreditCard className="w-5 h-5 text-blue-600" />
+                                            Payment Details #{viewingPayment}
+                                        </CardTitle>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setViewingPayment(null)}
+                                            className="h-8 w-8 p-0"
+                                        >
+                                            <XCircle className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Payment ID</h4>
+                                            <p className="text-gray-600">#{payment.id}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Claim ID</h4>
+                                            <p className="text-gray-600">#{payment.claimId}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Beneficiary</h4>
+                                            <p className="text-gray-600">{claimDetails.patientName}</p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Payment Amount</h4>
+                                            <p className="text-gray-600 flex items-center gap-2">
+                                                <DollarSign className="w-4 h-4" />
+                                                ${payment.amount}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Original Claim Amount</h4>
+                                            <p className="text-gray-600 flex items-center gap-2">
+                                                <DollarSign className="w-4 h-4" />
+                                                ${claimDetails.cost}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Coverage Percentage</h4>
+                                            <p className="text-gray-600">
+                                                {Math.round((payment.amount / claimDetails.cost) * 100)}%
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Initiated Date</h4>
+                                            <p className="text-gray-600 flex items-center gap-2">
+                                                <CalendarDays className="w-4 h-4" />
+                                                {payment.initiatedDate}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Status</h4>
+                                            <Badge
+                                                variant={
+                                                    payment.status === 'completed'
+                                                        ? 'default'
+                                                        : payment.status === 'rejected'
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                }
+                                                className={
+                                                    payment.status === 'completed'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : payment.status === 'rejected'
+                                                            ? 'bg-red-100 text-red-800'
+                                                            : payment.status === 'pending'
+                                                                ? 'bg-yellow-100 text-yellow-800'
+                                                                : ''
+                                                }
+                                            >
+                                                {payment.status === 'completed' ? 'Paid' :
+                                                    payment.status === 'rejected' ? 'Rejected' :
+                                                        payment.status === 'pending' ? 'Pending' :
+                                                            payment.status}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 className="font-medium text-gray-900 mb-2">Claim Details</h4>
+                                        <div className="bg-gray-50 p-3 rounded-md">
+                                            <p className="text-sm text-gray-700">
+                                                <span className="font-medium">Diagnosis:</span> {claimDetails.diagnosis}
+                                            </p>
+                                            <p className="text-sm text-gray-700 mt-1">
+                                                <span className="font-medium">Doctor:</span> {claimDetails.doctorName}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {payment.completedDate && (
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-1">Completed Date</h4>
+                                            <p className="text-gray-600 flex items-center gap-2">
+                                                <CalendarDays className="w-4 h-4" />
+                                                {payment.completedDate}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {payment.bankNotes && (
+                                        <div>
+                                            <h4 className="font-medium text-gray-900 mb-2">Bank Notes</h4>
+                                            <p className="text-gray-600 bg-gray-50 p-3 rounded-md">{payment.bankNotes}</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                )
+            })()}
         </div>
     )
 }
