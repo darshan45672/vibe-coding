@@ -5,25 +5,34 @@ import { useAppStore } from '@/lib/store'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle, Calendar, Edit, Trash2, Eye, MoreHorizontal } from 'lucide-react'
 
 export function PatientView() {
-    const { treatments, claims, users, addClaim, updateClaim, deleteClaim, currentUser } = useAppStore()
+    const { treatments, claims, appointments, users, addClaim, updateClaim, deleteClaim, addAppointment, updateAppointment, deleteAppointment, updateAppointmentStatus, currentUser } = useAppStore()
     const [showClaimForm, setShowClaimForm] = useState(false)
     const [showAppointmentForm, setShowAppointmentForm] = useState(false)
     const [editingClaim, setEditingClaim] = useState<string | null>(null)
     const [viewingClaim, setViewingClaim] = useState<string | null>(null)
+    const [editingAppointment, setEditingAppointment] = useState<string | null>(null)
+    const [viewingAppointment, setViewingAppointment] = useState<string | null>(null)
     const [formData, setFormData] = useState({
         treatmentId: '',
         documents: [] as string[]
     })
     const [appointmentData, setAppointmentData] = useState({
+        doctorId: '',
+        date: '',
+        time: '',
+        reason: ''
+    })
+    const [appointmentFormData, setAppointmentFormData] = useState({
         doctorId: '',
         date: '',
         time: '',
@@ -49,6 +58,8 @@ export function PatientView() {
     const allPatientTreatments = treatments.filter(t => t.patientId === patientId)
 
     const patientClaims = claims.filter(c => c.patientId === patientId)
+
+    const patientAppointments = appointments.filter(a => a.patientId === patientId)
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -123,8 +134,31 @@ export function PatientView() {
         e.preventDefault()
         if (!appointmentData.doctorId || !appointmentData.date || !appointmentData.time || !appointmentData.reason) return
 
-        // Simulate appointment booking
-        alert(`Appointment booked successfully!\nDoctor: ${doctors.find(d => d.id === appointmentData.doctorId)?.name}\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nReason: ${appointmentData.reason}`)
+        const doctor = doctors.find(d => d.id === appointmentData.doctorId)
+        if (!doctor) return
+
+        if (editingAppointment) {
+            // Update existing appointment
+            updateAppointment(editingAppointment, {
+                doctorId: appointmentData.doctorId,
+                doctorName: doctor.name,
+                date: appointmentData.date,
+                time: appointmentData.time,
+                reason: appointmentData.reason
+            })
+            setEditingAppointment(null)
+        } else {
+            // Create new appointment
+            addAppointment({
+                patientId,
+                patientName,
+                doctorId: appointmentData.doctorId,
+                doctorName: doctor.name,
+                date: appointmentData.date,
+                time: appointmentData.time,
+                reason: appointmentData.reason
+            })
+        }
 
         setAppointmentData({
             doctorId: '',
@@ -213,6 +247,56 @@ export function PatientView() {
         // Don't close the main claim form, just reset editing state
     }
 
+    const handleEditAppointment = (appointmentId: string) => {
+        const appointment = appointments.find(a => a.id === appointmentId)
+        if (!appointment) return
+
+        // Only allow editing scheduled appointments
+        if (appointment.status !== 'scheduled') {
+            alert(`Cannot edit ${appointment.status} appointments. Only scheduled appointments can be modified.`)
+            return
+        }
+
+        setEditingAppointment(appointmentId)
+        setAppointmentData({
+            doctorId: appointment.doctorId,
+            date: appointment.date,
+            time: appointment.time,
+            reason: appointment.reason
+        })
+        setShowAppointmentForm(true)
+    }
+
+    const handleDeleteAppointment = (appointmentId: string) => {
+        const appointment = appointments.find(a => a.id === appointmentId)
+        if (!appointment) return
+
+        // Only allow deleting scheduled appointments
+        if (appointment.status !== 'scheduled') {
+            alert(`Cannot delete ${appointment.status} appointments. Only scheduled appointments can be removed.`)
+            return
+        }
+
+        if (confirm('Are you sure you want to cancel this appointment? This action cannot be undone.')) {
+            deleteAppointment(appointmentId)
+        }
+    }
+
+    const handleViewAppointment = (appointmentId: string) => {
+        setViewingAppointment(appointmentId)
+    }
+
+    const handleCancelAppointmentEdit = () => {
+        setEditingAppointment(null)
+        setAppointmentData({
+            doctorId: '',
+            date: '',
+            time: '',
+            reason: ''
+        })
+        setShowAppointmentForm(false)
+    }
+
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'pending': return <Clock className="w-4 h-4 text-yellow-500" />
@@ -276,70 +360,120 @@ export function PatientView() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleAppointmentSubmit} className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="sm:col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium mb-2">Select Doctor</label>
-                                    <Select
-                                        value={appointmentData.doctorId}
-                                        onValueChange={(value) => setAppointmentData(prev => ({ ...prev, doctorId: value }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Choose a doctor" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {doctors.map(doctor => (
-                                                <SelectItem key={doctor.id} value={doctor.id}>
-                                                    {doctor.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                        <form onSubmit={handleAppointmentSubmit} className="space-y-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Left Column: Doctor Selection and Details */}
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Select Doctor</label>
+                                        <Select
+                                            value={appointmentData.doctorId}
+                                            onValueChange={(value) => setAppointmentData(prev => ({ ...prev, doctorId: value }))}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Choose a doctor" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {doctors.map(doctor => (
+                                                    <SelectItem key={doctor.id} value={doctor.id}>
+                                                        Dr. {doctor.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Doctor Preview Card */}
+                                    {appointmentData.doctorId && (
+                                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                            {(() => {
+                                                const selectedDoctor = doctors.find(d => d.id === appointmentData.doctorId)
+                                                if (!selectedDoctor) return null
+
+                                                return (
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                                                <span className="text-xl">👨‍⚕️</span>
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="font-semibold text-lg text-gray-900">Dr. {selectedDoctor.name}</h3>
+                                                                <p className="text-blue-700 font-medium">General Practitioner</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1 text-sm text-gray-600">
+                                                            <p>📍 Healthcare Center, Main Building</p>
+                                                            <p>🕐 Available: Mon-Fri, 9:00 AM - 5:00 PM</p>
+                                                            <p>📞 Contact: +1 (555) 123-4567</p>
+                                                            <p>🩺 Specialization: Family Medicine</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex items-center">
+                                                                <span className="text-yellow-400">⭐⭐⭐⭐⭐</span>
+                                                                <span className="ml-1 text-sm text-gray-600">(4.9/5.0)</span>
+                                                            </div>
+                                                            <span className="text-sm text-green-600 font-medium">• Available</span>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="sm:col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium mb-2">Preferred Date</label>
-                                    <Input
-                                        type="date"
-                                        value={appointmentData.date}
-                                        onChange={(e) => setAppointmentData(prev => ({ ...prev, date: e.target.value }))}
-                                        min={new Date().toISOString().split('T')[0]}
-                                        required
-                                    />
-                                </div>
+                                {/* Right Column: Appointment Details */}
+                                <div className="space-y-4">
+                                    {/* Date and Time */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">Preferred Date</label>
+                                            <Input
+                                                type="date"
+                                                value={appointmentData.date}
+                                                onChange={(e) => setAppointmentData(prev => ({ ...prev, date: e.target.value }))}
+                                                min={new Date().toISOString().split('T')[0]}
+                                                required
+                                            />
+                                        </div>
 
-                                <div className="sm:col-span-2 md:col-span-1">
-                                    <label className="block text-sm font-medium mb-2">Preferred Time</label>
-                                    <Select
-                                        value={appointmentData.time}
-                                        onValueChange={(value) => setAppointmentData(prev => ({ ...prev, time: value }))}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select time slot" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="09:00">09:00 AM</SelectItem>
-                                            <SelectItem value="10:00">10:00 AM</SelectItem>
-                                            <SelectItem value="11:00">11:00 AM</SelectItem>
-                                            <SelectItem value="14:00">02:00 PM</SelectItem>
-                                            <SelectItem value="15:00">03:00 PM</SelectItem>
-                                            <SelectItem value="16:00">04:00 PM</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">Preferred Time Slot</label>
+                                            <Select
+                                                value={appointmentData.time}
+                                                onValueChange={(value) => setAppointmentData(prev => ({ ...prev, time: value }))}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select time slot" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="09:00">09:00 AM - Morning</SelectItem>
+                                                    <SelectItem value="10:00">10:00 AM - Morning</SelectItem>
+                                                    <SelectItem value="11:00">11:00 AM - Morning</SelectItem>
+                                                    <SelectItem value="14:00">02:00 PM - Afternoon</SelectItem>
+                                                    <SelectItem value="15:00">03:00 PM - Afternoon</SelectItem>
+                                                    <SelectItem value="16:00">04:00 PM - Afternoon</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
 
-                                <div className="sm:col-span-2">
-                                    <label className="block text-sm font-medium mb-2">Reason for Visit</label>
-                                    <Input
-                                        value={appointmentData.reason}
-                                        onChange={(e) => setAppointmentData(prev => ({ ...prev, reason: e.target.value }))}
-                                        placeholder="Describe your symptoms or reason for visit..."
-                                        required
-                                    />
+                                    {/* Reason for Visit */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Reason for Visit</label>
+                                        <Textarea
+                                            value={appointmentData.reason}
+                                            onChange={(e) => setAppointmentData(prev => ({ ...prev, reason: e.target.value }))}
+                                            placeholder="Describe your symptoms or reason for visit..."
+                                            className="min-h-[120px]"
+                                            required
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Please provide details about your symptoms or the purpose of your visit</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row gap-2">
+                            {/* Action Buttons */}
+                            <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200">
                                 <Button type="submit" className="w-full sm:w-auto">Book Appointment</Button>
                                 <Button type="button" variant="outline" onClick={() => setShowAppointmentForm(false)} className="w-full sm:w-auto">
                                     Cancel
@@ -350,7 +484,7 @@ export function PatientView() {
                 </Card>
             )}
 
-            {availableTreatments.length === 0 && !showClaimForm && !showAppointmentForm && (
+            {/* {availableTreatments.length === 0 && !showClaimForm && !showAppointmentForm && (
                 <Card>
                     <CardContent className="pt-6">
                         <p className="text-center text-gray-500">
@@ -358,7 +492,7 @@ export function PatientView() {
                         </p>
                     </CardContent>
                 </Card>
-            )}
+            )} */}
 
             {showClaimForm && (
                 <Card>
@@ -1145,6 +1279,271 @@ export function PatientView() {
                             </Button>
                             <Button
                                 onClick={handleCancelEdit}
+                                variant="outline"
+                                className="w-full sm:w-auto sm:ml-auto"
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* My Appointments Section */}
+            <Card className="w-full">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                        <Calendar className="w-5 h-5 text-blue-600" />
+                        My Appointments
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {patientAppointments.length === 0 ? (
+                        <div className="text-center py-8 sm:py-12">
+                            <Calendar className="mx-auto w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mb-4" />
+                            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No appointments yet</h3>
+                            <p className="text-sm text-gray-500 mb-4">Book your first appointment using the form above</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Date</TableHead>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Time</TableHead>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4 hidden sm:table-cell">Doctor</TableHead>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Reason</TableHead>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4">Status</TableHead>
+                                        <TableHead className="text-xs sm:text-sm px-2 sm:px-4 text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {patientAppointments.map((appointment) => (
+                                        <TableRow key={appointment.id} className="group hover:bg-gray-50/50">
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{appointment.date}</span>
+                                                    <span className="text-xs text-gray-500 sm:hidden">{appointment.doctorId}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4">
+                                                <span className="font-medium">{appointment.time}</span>
+                                            </TableCell>
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4 hidden sm:table-cell">
+                                                <span className="font-medium">{appointment.doctorId}</span>
+                                            </TableCell>
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4">
+                                                <span className="truncate max-w-[120px] sm:max-w-none block">{appointment.reason}</span>
+                                            </TableCell>
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${appointment.status === 'scheduled'
+                                                        ? 'bg-blue-100 text-blue-800'
+                                                        : appointment.status === 'completed'
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                    {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4 text-right">
+                                                <div className="flex items-center justify-end">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-40">
+                                                            <DropdownMenuItem onClick={() => setViewingAppointment(appointment.id)}>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                View Details
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleEditAppointment(appointment.id)}>
+                                                                <Edit className="mr-2 h-4 w-4" />
+                                                                Edit
+                                                                {appointment.status !== 'scheduled' && (
+                                                                    <span className="ml-2 text-xs text-gray-400">(Scheduled only)</span>
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleDeleteAppointment(appointment.id)}
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Appointment Details Modal */}
+            <Dialog open={!!viewingAppointment} onOpenChange={(open) => !open && setViewingAppointment(null)}>
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                            <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="hidden sm:inline">Appointment Details - #{viewingAppointment}</span>
+                            <span className="sm:hidden">Appointment #{viewingAppointment}</span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {(() => {
+                        const appointment = appointments.find(a => a.id === viewingAppointment)
+                        if (!appointment) return <p>Appointment not found</p>
+
+                        return (
+                            <div className="space-y-4 sm:space-y-6">
+                                {/* Basic Information */}
+                                <div>
+                                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Appointment Information</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                                        <div>
+                                            <label className="text-xs sm:text-sm font-medium text-gray-600">Date & Time</label>
+                                            <p className="text-sm sm:text-base text-gray-900 font-medium">{appointment.date} at {appointment.time}</p>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs sm:text-sm font-medium text-gray-600">Doctor</label>
+                                            <p className="text-sm sm:text-base text-gray-900 font-medium">{appointment.doctorId}</p>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="text-xs sm:text-sm font-medium text-gray-600">Reason for Visit</label>
+                                            <p className="text-sm sm:text-base text-gray-900">{appointment.reason}</p>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs sm:text-sm font-medium text-gray-600">Status</label>
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${appointment.status === 'scheduled'
+                                                    ? 'bg-blue-100 text-blue-800'
+                                                    : appointment.status === 'completed'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs sm:text-sm font-medium text-gray-600">Booked On</label>
+                                            <p className="text-sm sm:text-base text-gray-900">{appointment.bookedDate}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })()}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Appointment Modal */}
+            <Dialog open={!!editingAppointment} onOpenChange={(open) => !open && handleCancelAppointmentEdit()}>
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                            <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="hidden sm:inline">Edit Appointment - #{editingAppointment}</span>
+                            <span className="sm:hidden">Edit #{editingAppointment}</span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {(() => {
+                        const appointment = appointments.find(a => a.id === editingAppointment)
+                        if (!appointment) return <p>Appointment not found</p>
+
+                        return (
+                            <form onSubmit={handleAppointmentSubmit} className="space-y-4 sm:space-y-6">
+                                {/* Current Appointment Info */}
+                                <div className="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <h4 className="font-medium text-blue-900 mb-2">Current Appointment Information</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-blue-800">
+                                        <p><span className="font-medium">Date:</span> {appointment.date}</p>
+                                        <p><span className="font-medium">Time:</span> {appointment.time}</p>
+                                        <p><span className="font-medium">Doctor:</span> {appointment.doctorId}</p>
+                                        <p><span className="font-medium">Reason:</span> {appointment.reason}</p>
+                                    </div>
+                                </div>
+
+                                {/* Edit Form */}
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <Label htmlFor="edit-date" className="text-sm font-medium">Date *</Label>
+                                            <Input
+                                                id="edit-date"
+                                                type="date"
+                                                value={appointmentFormData.date}
+                                                onChange={(e) => setAppointmentFormData(prev => ({ ...prev, date: e.target.value }))}
+                                                required
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="edit-time" className="text-sm font-medium">Time *</Label>
+                                            <Input
+                                                id="edit-time"
+                                                type="time"
+                                                value={appointmentFormData.time}
+                                                onChange={(e) => setAppointmentFormData(prev => ({ ...prev, time: e.target.value }))}
+                                                required
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="edit-doctor" className="text-sm font-medium">Doctor *</Label>
+                                        <select
+                                            id="edit-doctor"
+                                            value={appointmentFormData.doctorId}
+                                            onChange={(e) => setAppointmentFormData(prev => ({ ...prev, doctorId: e.target.value }))}
+                                            required
+                                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        >
+                                            <option value="">Select a doctor</option>
+                                            {doctors.map((doctor) => (
+                                                <option key={doctor.id} value={doctor.name}>
+                                                    {doctor.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="edit-reason" className="text-sm font-medium">Reason for Visit *</Label>
+                                        <Textarea
+                                            id="edit-reason"
+                                            value={appointmentFormData.reason}
+                                            onChange={(e) => setAppointmentFormData(prev => ({ ...prev, reason: e.target.value }))}
+                                            placeholder="Please describe the reason for your appointment"
+                                            required
+                                            className="mt-1"
+                                            rows={3}
+                                        />
+                                    </div>
+                                </div>
+                            </form>
+                        )
+                    })()}
+
+                    <DialogFooter className="border-t pt-4 flex-col sm:flex-row gap-2 sm:gap-0">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full">
+                            <Button
+                                onClick={handleAppointmentSubmit}
+                                disabled={!appointmentFormData.date || !appointmentFormData.time || !appointmentFormData.doctorId || !appointmentFormData.reason}
+                                className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                            >
+                                <Calendar className="w-4 h-4" />
+                                Update Appointment
+                            </Button>
+                            <Button
+                                onClick={handleCancelAppointmentEdit}
                                 variant="outline"
                                 className="w-full sm:w-auto sm:ml-auto"
                             >

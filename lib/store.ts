@@ -12,6 +12,19 @@ export interface Treatment {
     status: 'pending' | 'submitted'
 }
 
+export interface Appointment {
+    id: string
+    patientId: string
+    patientName: string
+    doctorId: string
+    doctorName: string
+    date: string
+    time: string
+    reason: string
+    status: 'scheduled' | 'completed' | 'cancelled'
+    bookedDate: string
+}
+
 export interface Claim {
     id: string
     patientId: string
@@ -50,6 +63,7 @@ interface AppState {
     currentRole: 'doctor' | 'patient' | 'insurance' | 'bank'
     users: User[]
     treatments: Treatment[]
+    appointments: Appointment[]
     claims: Claim[]
     payments: Payment[]
 
@@ -58,6 +72,10 @@ interface AppState {
     setCurrentUser: (user: User) => void
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     submitTreatment: (treatmentId: string) => void
+    addAppointment: (appointment: Omit<Appointment, 'id' | 'status' | 'bookedDate'>) => void
+    updateAppointment: (appointmentId: string, updates: Partial<Omit<Appointment, 'id' | 'bookedDate'>>) => void
+    deleteAppointment: (appointmentId: string) => void
+    updateAppointmentStatus: (appointmentId: string, status: 'scheduled' | 'completed' | 'cancelled') => void
     addClaim: (claim: Omit<Claim, 'id' | 'status' | 'submittedDate'>) => void
     updateClaim: (claimId: string, updates: Partial<Omit<Claim, 'id' | 'submittedDate'>>) => void
     deleteClaim: (claimId: string) => void
@@ -221,6 +239,45 @@ const dummyClaims: Claim[] = [
     }
 ]
 
+const dummyAppointments: Appointment[] = [
+    {
+        id: '1',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        date: '2025-08-05',
+        time: '09:00',
+        reason: 'Regular checkup and blood pressure monitoring',
+        status: 'scheduled',
+        bookedDate: '2025-07-30'
+    },
+    {
+        id: '2',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        date: '2025-08-10',
+        time: '14:00',
+        reason: 'Follow-up consultation for dental care',
+        status: 'scheduled',
+        bookedDate: '2025-07-29'
+    },
+    {
+        id: '3',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        date: '2025-08-01',
+        time: '11:00',
+        reason: 'Ankle injury follow-up examination',
+        status: 'completed',
+        bookedDate: '2025-07-25'
+    }
+]
+
 const dummyPayments: Payment[] = [
     {
         id: '1',
@@ -245,6 +302,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentRole: 'doctor',
     users: dummyUsers,
     treatments: dummyTreatments,
+    appointments: dummyAppointments,
     claims: dummyClaims,
     payments: dummyPayments,
 
@@ -268,6 +326,38 @@ export const useAppStore = create<AppState>((set, get) => ({
         set(state => ({
             treatments: state.treatments.map(t =>
                 t.id === treatmentId ? { ...t, status: 'submitted' } : t
+            )
+        }))
+    },
+
+    addAppointment: (appointment) => {
+        const newAppointment: Appointment = {
+            ...appointment,
+            id: Date.now().toString(),
+            status: 'scheduled',
+            bookedDate: new Date().toISOString().split('T')[0]
+        }
+        set(state => ({ appointments: [...state.appointments, newAppointment] }))
+    },
+
+    updateAppointment: (appointmentId, updates) => {
+        set(state => ({
+            appointments: state.appointments.map(a =>
+                a.id === appointmentId ? { ...a, ...updates } : a
+            )
+        }))
+    },
+
+    deleteAppointment: (appointmentId) => {
+        set(state => ({
+            appointments: state.appointments.filter(a => a.id !== appointmentId)
+        }))
+    },
+
+    updateAppointmentStatus: (appointmentId, status) => {
+        set(state => ({
+            appointments: state.appointments.map(a =>
+                a.id === appointmentId ? { ...a, status } : a
             )
         }))
     },
