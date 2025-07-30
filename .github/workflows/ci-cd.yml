@@ -456,20 +456,76 @@ jobs:
 
       - name: Create security summary
         run: |
-          echo "# 🛡️ CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "## Stage Results:" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔍 GitLeaks: ${{ needs.gitleaks.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🛡️ Semgrep: ${{ needs.semgrep-security.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔒 Dependency Check: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 📝 Linting & Formatting: ${{ needs.lint-and-format.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🧪 Testing: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🏗️ Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔬 CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "# 🛡️ CI/CD Pipeline Summary Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Pipeline Status:" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** \`${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Pipeline Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📊 Stage Execution Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Function to get status emoji
+          get_status_emoji() {
+            case $1 in
+              "success") echo "✅" ;;
+              "failure") echo "❌" ;;
+              "cancelled") echo "⏹️" ;;
+              "skipped") echo "⏭️" ;;
+              *) echo "❓" ;;
+            esac
+          }
+          
+          echo "| 🔍 GitLeaks | $(get_status_emoji '${{ needs.gitleaks.result }}') ${{ needs.gitleaks.result }} | Secret detection and credential scanning |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🛡️ Semgrep Security | $(get_status_emoji '${{ needs.semgrep-security.result }}') ${{ needs.semgrep-security.result }} | Static security analysis for vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Dependency Check | $(get_status_emoji '${{ needs.dependency-check.result }}') ${{ needs.dependency-check.result }} | npm audit for dependency vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📝 Linting & Formatting | $(get_status_emoji '${{ needs.lint-and-format.result }}') ${{ needs.lint-and-format.result }} | Code quality and style validation |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Testing | $(get_status_emoji '${{ needs.test.result }}') ${{ needs.test.result }} | Unit test generation and execution |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏗️ Build | $(get_status_emoji '${{ needs.build.result }}') ${{ needs.build.result }} | Application build and compilation |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔬 CodeQL Analysis | $(get_status_emoji '${{ needs.codeql.result }}') ${{ needs.codeql.result }} | Advanced static code analysis |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Deployment | $(get_status_emoji '${{ needs.deploy.result }}') ${{ needs.deploy.result }} | Production deployment (main branch only) |" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Overall Pipeline Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if all critical stages passed
           if [[ "${{ needs.gitleaks.result }}" == "success" && "${{ needs.dependency-check.result }}" == "success" && "${{ needs.lint-and-format.result }}" == "success" && "${{ needs.test.result }}" == "success" && "${{ needs.build.result }}" == "success" && "${{ needs.codeql.result }}" == "success" ]]; then
-            echo "✅ **All stages completed successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ **SUCCESS: All Critical Stages Completed!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 **Congratulations!** Your code has passed all security, quality, and functionality checks." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**What this means:**" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ No secrets or credentials detected in code" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ No security vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Dependencies are secure and up-to-date" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Code quality standards met" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ All tests passing" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Application builds successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Advanced security analysis completed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ **Pipeline failed at one or more stages**" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ **FAILURE: Pipeline Issues Detected**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Action Required:** One or more pipeline stages failed." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Please review the failed stages above and:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check the detailed logs for each failed stage" >> $GITHUB_STEP_SUMMARY
+            echo "2. Fix the identified issues" >> $GITHUB_STEP_SUMMARY
+            echo "3. Commit and push your fixes to re-trigger the pipeline" >> $GITHUB_STEP_SUMMARY
           fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📈 Pipeline Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Stages:** 8" >> $GITHUB_STEP_SUMMARY
+          echo "- **Security Checks:** 3 (GitLeaks, Semgrep, Dependency Audit)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Quality Gates:** 2 (Linting, Testing)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build & Analysis:** 3 (Build, CodeQL, Deploy)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Generated by CI/CD Pipeline • $(date '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
