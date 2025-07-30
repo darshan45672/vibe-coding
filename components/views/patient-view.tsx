@@ -65,7 +65,7 @@ export function PatientView() {
 
         // Simulate appointment booking
         alert(`Appointment booked successfully!\nDoctor: ${doctors.find(d => d.id === appointmentData.doctorId)?.name}\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nReason: ${appointmentData.reason}`)
-        
+
         setAppointmentData({
             doctorId: '',
             date: '',
@@ -139,8 +139,8 @@ export function PatientView() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium mb-2">Select Doctor</label>
-                                    <Select 
-                                        value={appointmentData.doctorId} 
+                                    <Select
+                                        value={appointmentData.doctorId}
                                         onValueChange={(value) => setAppointmentData(prev => ({ ...prev, doctorId: value }))}
                                     >
                                         <SelectTrigger>
@@ -169,8 +169,8 @@ export function PatientView() {
 
                                 <div>
                                     <label className="block text-sm font-medium mb-2">Preferred Time</label>
-                                    <Select 
-                                        value={appointmentData.time} 
+                                    <Select
+                                        value={appointmentData.time}
                                         onValueChange={(value) => setAppointmentData(prev => ({ ...prev, time: value }))}
                                     >
                                         <SelectTrigger>
