@@ -1,5 +1,8 @@
 name: CI/CD Pipeline
 
+# Sequential execution pipeline - each stage must pass before the next begins
+# Pipeline will fail immediately if any stage fails
+
 on:
   push:
     branches: [ main, dev, develop, CICD ]
@@ -33,6 +36,7 @@ jobs:
   semgrep-security:
     name: 🛡️ Semgrep Security Analysis
     runs-on: ubuntu-latest
+    needs: [gitleaks]
     container:
       image: returntocorp/semgrep
     if: (github.actor != 'dependabot[bot]')
@@ -64,6 +68,8 @@ jobs:
   dependency-check:
     name: 🔒 Dependency Vulnerability Check
     runs-on: ubuntu-latest
+    needs: [semgrep-security]
+    if: always() && (needs.semgrep-security.result == 'success' || needs.semgrep-security.result == 'skipped')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -95,6 +101,7 @@ jobs:
   lint-and-format:
     name: 📝 Linting and Formatting
     runs-on: ubuntu-latest
+    needs: [dependency-check]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -273,7 +280,6 @@ jobs:
       - name: Run tests with coverage
         run: |
           npx jest --coverage --passWithNoTests
-        continue-on-error: true
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -288,7 +294,7 @@ jobs:
   build:
     name: 🏗️ Build Application
     runs-on: ubuntu-latest
-    needs: [gitleaks, dependency-check, lint-and-format]
+    needs: [test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -361,7 +367,7 @@ jobs:
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
-    needs: [test, build, codeql, semgrep-security]
+    needs: [codeql]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     steps:
@@ -382,7 +388,7 @@ jobs:
   security-summary:
     name: 📊 Security Summary
     runs-on: ubuntu-latest
-    needs: [gitleaks, semgrep-security, dependency-check]
+    needs: [gitleaks, semgrep-security, dependency-check, lint-and-format, test, build, codeql, deploy]
     if: always()
     steps:
       - name: Download all artifacts
@@ -390,7 +396,20 @@ jobs:
 
       - name: Create security summary
         run: |
-          echo "# 🛡️ Security Analysis Summary" >> $GITHUB_STEP_SUMMARY
-          echo "## GitLeaks Status: ${{ needs.gitleaks.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "## Semgrep Status: ${{ needs.semgrep-security.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "## Dependency Check Status: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "# 🛡️ CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Stage Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 GitLeaks: ${{ needs.gitleaks.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🛡️ Semgrep: ${{ needs.semgrep-security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 Dependency Check: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📝 Linting & Formatting: ${{ needs.lint-and-format.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 Testing: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏗️ Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔬 CodeQL: ${{ needs.codeql.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Deploy: ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Pipeline Status:" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.gitleaks.result }}" == "success" && "${{ needs.dependency-check.result }}" == "success" && "${{ needs.lint-and-format.result }}" == "success" && "${{ needs.test.result }}" == "success" && "${{ needs.build.result }}" == "success" && "${{ needs.codeql.result }}" == "success" ]]; then
+            echo "✅ **All stages completed successfully!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Pipeline failed at one or more stages**" >> $GITHUB_STEP_SUMMARY
+          fi

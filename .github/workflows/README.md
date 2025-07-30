@@ -2,7 +2,33 @@
 
 ## Overview
 
-This project implements a comprehensive CI/CD pipeline using GitHub Actions that includes security scanning, code quality checks, testing, and deployment automation.
+This project implements a comprehensive **sequential CI/CD pipeline** using GitHub Actions that includes security scanning, code quality checks, testing, and deployment automation. Each stage must complete successfully before the next stage begins, ensuring fail-fast behavior.
+
+## 🔄 Pipeline Execution Flow
+
+The pipeline executes in the following **strict sequential order**:
+
+```
+1. 🔍 GitLeaks (Secret Detection)
+   ↓ (must succeed)
+2. 🛡️ Semgrep (Security Analysis)
+   ↓ (must succeed)
+3. 🔒 Dependency Check (npm audit)
+   ↓ (must succeed)
+4. 📝 Linting & Formatting (ESLint + Prettier)
+   ↓ (must succeed)
+5. 🧪 Unit Testing (Jest + Coverage)
+   ↓ (must succeed)
+6. 🏗️ Build (Next.js compilation)
+   ↓ (must succeed)
+7. 🔬 CodeQL Analysis (Advanced security)
+   ↓ (must succeed)
+8. 🚀 Deploy (Production - main branch only)
+   ↓ (always runs)
+9. 📊 Pipeline Summary (Results overview)
+```
+
+**⚠️ Fail-Fast Behavior**: If any stage fails, the entire pipeline stops and subsequent stages will not execute.
 
 ## Pipeline Stages
 
