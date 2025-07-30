@@ -9,19 +9,21 @@ export interface Treatment {
     diagnosis: string
     treatmentDetails?: string
     cost: number
-    costBreakdown?: {
-        consultation: number
-        procedures: number
-        medication: number
-        equipment: number
-        other: number
-    }
     date: string
-    status: 'pending' | 'submitted' | 'discharged'
-    medicalReports?: string[]
-    dischargeSummary?: string
-    validatedForClaim?: boolean
-    validationNotes?: string
+    status: 'pending' | 'submitted'
+}
+
+export interface Appointment {
+    id: string
+    patientId: string
+    patientName: string
+    doctorId: string
+    doctorName: string
+    date: string
+    time: string
+    reason: string
+    status: 'scheduled' | 'completed' | 'cancelled'
+    bookedDate: string
 }
 
 export interface Claim {
@@ -44,7 +46,7 @@ export interface Payment {
     id: string
     claimId: string
     amount: number
-    status: 'initiated' | 'completed'
+    status: 'pending' | 'initiated' | 'completed' | 'rejected'
     initiatedDate: string
     completedDate?: string
     bankNotes?: string
@@ -62,6 +64,7 @@ interface AppState {
     currentRole: 'doctor' | 'patient' | 'insurance' | 'bank'
     users: User[]
     treatments: Treatment[]
+    appointments: Appointment[]
     claims: Claim[]
     payments: Payment[]
 
@@ -71,12 +74,17 @@ interface AppState {
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     updateTreatment: (treatmentId: string, updates: Partial<Treatment>) => void
     submitTreatment: (treatmentId: string) => void
-    addDischargeSummary: (treatmentId: string, summary: string) => void
-    validateTreatmentForClaim: (treatmentId: string, isValid: boolean, notes?: string) => void
+    addAppointment: (appointment: Omit<Appointment, 'id' | 'status' | 'bookedDate'>) => void
+    updateAppointment: (appointmentId: string, updates: Partial<Omit<Appointment, 'id' | 'bookedDate'>>) => void
+    deleteAppointment: (appointmentId: string) => void
+    updateAppointmentStatus: (appointmentId: string, status: 'scheduled' | 'completed' | 'cancelled') => void
     addClaim: (claim: Omit<Claim, 'id' | 'status' | 'submittedDate'>) => void
+    updateClaim: (claimId: string, updates: Partial<Omit<Claim, 'id' | 'submittedDate'>>) => void
+    deleteClaim: (claimId: string) => void
     reviewClaim: (claimId: string, status: 'approved' | 'rejected', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
     completePayment: (paymentId: string, notes?: string) => void
+    rejectPayment: (paymentId: string, notes?: string) => void
 }
 
 // Dummy data
@@ -130,10 +138,51 @@ const dummyTreatments: Treatment[] = [
             other: 20
         },
         date: '2025-07-28',
-        status: 'submitted',
-        medicalReports: ['ankle_xray.pdf', 'treatment_plan.pdf'],
-        validatedForClaim: true,
-        validationNotes: 'Treatment follows standard protocol for ankle sprains.'
+        status: 'submitted'
+    },
+    {
+        id: '3',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        diagnosis: 'Blood Pressure Check',
+        cost: 150,
+        date: '2025-07-20',
+        status: 'submitted'
+    },
+    {
+        id: '4',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        diagnosis: 'Flu Treatment',
+        cost: 200,
+        date: '2025-07-22',
+        status: 'submitted'
+    },
+    {
+        id: '5',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        diagnosis: 'Diabetes Consultation',
+        cost: 300,
+        date: '2025-07-24',
+        status: 'pending'
+    },
+    {
+        id: '6',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        patientId: '3',
+        patientName: 'John Smith',
+        diagnosis: 'Dental Checkup',
+        cost: 180,
+        date: '2025-07-29',
+        status: 'submitted'
     }
 ]
 
@@ -154,6 +203,19 @@ const dummyClaims: Claim[] = [
         insuranceNotes: 'Claim approved - routine checkup covered under policy'
     },
     {
+        id: '5',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        treatmentId: '6',
+        diagnosis: 'Dental Checkup',
+        cost: 180,
+        documents: ['dental_report.pdf'],
+        status: 'pending',
+        submittedDate: '2025-07-30'
+    },
+    {
         id: '2',
         patientId: '4',
         patientName: 'Emma Wilson',
@@ -165,6 +227,75 @@ const dummyClaims: Claim[] = [
         documents: ['x_ray.pdf', 'treatment_plan.pdf'],
         status: 'pending',
         submittedDate: '2025-07-29'
+    },
+    {
+        id: '3',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        treatmentId: '3',
+        diagnosis: 'Blood Pressure Check',
+        cost: 150,
+        documents: ['bp_report.pdf'],
+        status: 'approved',
+        submittedDate: '2025-07-21',
+        reviewedDate: '2025-07-22',
+        insuranceNotes: 'Approved - preventive care covered'
+    },
+    {
+        id: '4',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        treatmentId: '4',
+        diagnosis: 'Flu Treatment',
+        cost: 200,
+        documents: ['prescription.pdf', 'visit_notes.pdf'],
+        status: 'rejected',
+        submittedDate: '2025-07-23',
+        reviewedDate: '2025-07-24',
+        insuranceNotes: 'Rejected - insufficient documentation'
+    }
+]
+
+const dummyAppointments: Appointment[] = [
+    {
+        id: '1',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        date: '2025-08-05',
+        time: '09:00',
+        reason: 'Regular checkup and blood pressure monitoring',
+        status: 'scheduled',
+        bookedDate: '2025-07-30'
+    },
+    {
+        id: '2',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        date: '2025-08-10',
+        time: '14:00',
+        reason: 'Follow-up consultation for dental care',
+        status: 'scheduled',
+        bookedDate: '2025-07-29'
+    },
+    {
+        id: '3',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        date: '2025-08-01',
+        time: '11:00',
+        reason: 'Ankle injury follow-up examination',
+        status: 'completed',
+        bookedDate: '2025-07-25'
     }
 ]
 
@@ -177,6 +308,13 @@ const dummyPayments: Payment[] = [
         initiatedDate: '2025-07-27',
         completedDate: '2025-07-28',
         bankNotes: 'Payment processed successfully to patient account'
+    },
+    {
+        id: '2',
+        claimId: '1',
+        amount: 360, // 80% coverage for a $450 claim
+        status: 'pending',
+        initiatedDate: '2025-07-30'
     }
 ]
 
@@ -185,6 +323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentRole: 'doctor',
     users: dummyUsers,
     treatments: dummyTreatments,
+    appointments: dummyAppointments,
     claims: dummyClaims,
     payments: dummyPayments,
 
@@ -212,26 +351,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         }))
     },
 
-    updateTreatment: (treatmentId, updates) => {
+    addAppointment: (appointment) => {
+        const newAppointment: Appointment = {
+            ...appointment,
+            id: Date.now().toString(),
+            status: 'scheduled',
+            bookedDate: new Date().toISOString().split('T')[0]
+        }
+        set(state => ({ appointments: [...state.appointments, newAppointment] }))
+    },
+
+    updateAppointment: (appointmentId, updates) => {
         set(state => ({
-            treatments: state.treatments.map(t =>
-                t.id === treatmentId ? { ...t, ...updates } : t
+            appointments: state.appointments.map(a =>
+                a.id === appointmentId ? { ...a, ...updates } : a
             )
         }))
     },
 
-    addDischargeSummary: (treatmentId, summary) => {
+    deleteAppointment: (appointmentId) => {
         set(state => ({
-            treatments: state.treatments.map(t =>
-                t.id === treatmentId ? { ...t, dischargeSummary: summary, status: 'discharged' } : t
-            )
+            appointments: state.appointments.filter(a => a.id !== appointmentId)
         }))
     },
 
-    validateTreatmentForClaim: (treatmentId, isValid, notes) => {
+    updateAppointmentStatus: (appointmentId, status) => {
         set(state => ({
-            treatments: state.treatments.map(t =>
-                t.id === treatmentId ? { ...t, validatedForClaim: isValid, validationNotes: notes } : t
+            appointments: state.appointments.map(a =>
+                a.id === appointmentId ? { ...a, status } : a
             )
         }))
     },
@@ -244,6 +391,25 @@ export const useAppStore = create<AppState>((set, get) => ({
             submittedDate: new Date().toISOString().split('T')[0]
         }
         set(state => ({ claims: [...state.claims, newClaim] }))
+    },
+
+    updateClaim: (claimId, updates) => {
+        set(state => ({
+            claims: state.claims.map(c =>
+                c.id === claimId ? { ...c, ...updates } : c
+            )
+        }))
+    },
+
+    deleteClaim: (claimId) => {
+        set(state => ({
+            claims: state.claims.filter(c => c.id !== claimId)
+        }))
+
+        // Also remove associated payment if it exists
+        set(state => ({
+            payments: state.payments.filter(p => p.claimId !== claimId)
+        }))
     },
 
     reviewClaim: (claimId, status, notes) => {
@@ -268,7 +434,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     id: Date.now().toString(),
                     claimId,
                     amount: Math.floor(claim.cost * 0.8), // 80% coverage
-                    status: 'initiated',
+                    status: 'pending',
                     initiatedDate: new Date().toISOString().split('T')[0]
                 }
                 set(state => ({ payments: [...state.payments, payment] }))
@@ -280,7 +446,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const newPayment: Payment = {
             ...payment,
             id: Date.now().toString(),
-            status: 'initiated',
+            status: 'pending',
             initiatedDate: new Date().toISOString().split('T')[0]
         }
         set(state => ({ payments: [...state.payments, newPayment] }))
@@ -293,6 +459,21 @@ export const useAppStore = create<AppState>((set, get) => ({
                     ? {
                         ...p,
                         status: 'completed',
+                        completedDate: new Date().toISOString().split('T')[0],
+                        bankNotes: notes
+                    }
+                    : p
+            )
+        }))
+    },
+
+    rejectPayment: (paymentId, notes) => {
+        set(state => ({
+            payments: state.payments.map(p =>
+                p.id === paymentId
+                    ? {
+                        ...p,
+                        status: 'rejected',
                         completedDate: new Date().toISOString().split('T')[0],
                         bankNotes: notes
                     }
