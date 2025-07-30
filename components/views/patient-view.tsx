@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle, Calendar } from 'lucide-react'
 
 export function PatientView() {
-    const { treatments, claims, users, addClaim } = useAppStore()
+    const { treatments, claims, users, addClaim, currentUser, currentRole } = useAppStore()
     const [showClaimForm, setShowClaimForm] = useState(false)
     const [showAppointmentForm, setShowAppointmentForm] = useState(false)
     const [formData, setFormData] = useState({
@@ -25,7 +25,9 @@ export function PatientView() {
         reason: ''
     })
 
-    const patientId = '3' // Current patient (John Smith)
+    // Get current patient ID from the store, fallback to patient '3' for demo
+    const patientId = currentRole === 'patient' ? (currentUser?.id || '3') : '3'
+    const patientName = currentRole === 'patient' ? (currentUser?.name || 'John Smith') : 'John Smith'
     const doctors = users.filter(u => u.role === 'doctor')
     const availableTreatments = treatments.filter(t =>
         t.patientId === patientId &&
@@ -43,7 +45,7 @@ export function PatientView() {
 
         addClaim({
             patientId,
-            patientName: treatment.patientName,
+            patientName,
             doctorId: treatment.doctorId,
             doctorName: treatment.doctorName,
             treatmentId: treatment.id,
@@ -105,6 +107,9 @@ export function PatientView() {
                 <div>
                     <h2 className="text-3xl font-bold text-gray-900">Patient Portal</h2>
                     <p className="text-gray-600">Book appointments, file claims and track their status</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Current Patient: {patientName} | Available Treatments: {availableTreatments.length}
+                    </p>
                 </div>
                 <div className="flex gap-2">
                     <Button
@@ -119,9 +124,13 @@ export function PatientView() {
                         onClick={() => setShowClaimForm(!showClaimForm)}
                         className="flex items-center gap-2"
                         disabled={availableTreatments.length === 0}
+                        title={availableTreatments.length === 0 ? "No treatments available for claims. Visit a doctor first." : "File a new insurance claim"}
                     >
                         <Plus className="w-4 h-4" />
                         File New Claim
+                        {availableTreatments.length > 0 && (
+                            <Badge variant="secondary" className="ml-2">{availableTreatments.length}</Badge>
+                        )}
                     </Button>
                 </div>
             </div>
@@ -212,9 +221,32 @@ export function PatientView() {
             {availableTreatments.length === 0 && !showClaimForm && (
                 <Card>
                     <CardContent className="pt-6">
-                        <p className="text-center text-gray-500">
-                            No treatments available for claims. Please visit a doctor first.
-                        </p>
+                        <div className="text-center space-y-3">
+                            <FileText className="w-12 h-12 text-gray-400 mx-auto" />
+                            <div>
+                                <p className="text-gray-700 font-medium">No treatments available for claims</p>
+                                <p className="text-gray-500 text-sm">
+                                    You need completed treatments to file insurance claims. 
+                                    {treatments.filter(t => t.patientId === patientId).length === 0 
+                                        ? " Please visit a doctor first to get treatment."
+                                        : " Your treatments may still be pending or already have claims filed."
+                                    }
+                                </p>
+                                {treatments.filter(t => t.patientId === patientId).length > 0 && (
+                                    <div className="mt-3 text-xs text-gray-400">
+                                        <p>Your treatments:</p>
+                                        <ul className="mt-1 space-y-1">
+                                            {treatments.filter(t => t.patientId === patientId).map(t => (
+                                                <li key={t.id}>
+                                                    {t.diagnosis} - {t.status} 
+                                                    {claims.some(c => c.treatmentId === t.id) && " (claim filed)"}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
             )}
