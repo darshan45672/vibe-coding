@@ -10,16 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CalendarDays, DollarSign, FileText, Send, Plus, Upload, CheckCircle, XCircle, Eye, FileCheck, Receipt, Search, Filter, Users, TrendingUp, Clock, User, AlertTriangle, BarChart3, Download, MessageSquare, Calendar, Activity, Stethoscope, FileSpreadsheet, Bell, Settings, Phone } from 'lucide-react'
+import { CalendarDays, DollarSign, FileText, Send, Plus, Upload, CheckCircle, XCircle, Eye, FileCheck, Receipt, Search, Filter, Users, TrendingUp, Clock, User, AlertTriangle, BarChart3, Download, MessageSquare, Calendar, Activity, Stethoscope, FileSpreadsheet, Bell, Settings, Phone, Edit } from 'lucide-react'
 
 export function DoctorView() {
-    const { treatments, users, claims, addTreatment, submitTreatment, addDischargeSummary, validateTreatmentForClaim } = useAppStore()
+    const { treatments, users, claims, addTreatment, updateTreatment, deleteTreatment, submitTreatment, addDischargeSummary, validateTreatmentForClaim } = useAppStore()
     const [showAddForm, setShowAddForm] = useState(false)
     const [selectedTreatment, setSelectedTreatment] = useState<string | null>(null)
     const [showDischargeForm, setShowDischargeForm] = useState(false)
     const [showValidationForm, setShowValidationForm] = useState(false)
     const [showTreatmentDetails, setShowTreatmentDetails] = useState(false)
     const [selectedTreatmentForDetails, setSelectedTreatmentForDetails] = useState<string | null>(null)
+    const [editingTreatment, setEditingTreatment] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterStatus, setFilterStatus] = useState<string>('all')
     const [filterPatient, setFilterPatient] = useState<string>('all')
@@ -160,6 +161,7 @@ export function DoctorView() {
         setFormErrors({})
         setCurrentStep(1)
         setIsSubmitting(false)
+        setEditingTreatment(null)
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -192,27 +194,43 @@ export function DoctorView() {
             // Simulate API call delay
             await new Promise(resolve => setTimeout(resolve, 1000))
 
-            addTreatment({
-                doctorId: '1',
-                doctorName: 'Dr. Sarah Johnson',
-                patientId: formData.patientId,
-                patientName: patient.name,
-                diagnosis: formData.diagnosis,
-                treatmentDetails: formData.treatmentDetails,
-                cost: totalCost,
-                costBreakdown: breakdown,
-                date: formData.date,
-                medicalReports: formData.medicalReports,
-                validatedForClaim: false
-            })
+            if (editingTreatment) {
+                // Update existing treatment
+                updateTreatment(editingTreatment, {
+                    patientId: formData.patientId,
+                    patientName: patient.name,
+                    diagnosis: formData.diagnosis,
+                    treatmentDetails: formData.treatmentDetails,
+                    cost: totalCost,
+                    costBreakdown: breakdown,
+                    date: formData.date,
+                    medicalReports: formData.medicalReports
+                })
+                alert('Treatment updated successfully! 🎉')
+                setEditingTreatment(null)
+            } else {
+                // Create new treatment
+                addTreatment({
+                    doctorId: '1',
+                    doctorName: 'Dr. Sarah Johnson',
+                    patientId: formData.patientId,
+                    patientName: patient.name,
+                    diagnosis: formData.diagnosis,
+                    treatmentDetails: formData.treatmentDetails,
+                    cost: totalCost,
+                    costBreakdown: breakdown,
+                    date: formData.date,
+                    medicalReports: formData.medicalReports,
+                    validatedForClaim: false
+                })
+                alert('Treatment added successfully! 🎉')
+            }
 
-            // Success feedback
-            alert('Treatment added successfully! 🎉')
             resetForm()
             setShowAddForm(false)
 
         } catch (error) {
-            alert('Error adding treatment. Please try again.')
+            alert(`Error ${editingTreatment ? 'updating' : 'adding'} treatment. Please try again.`)
             console.error('Error:', error)
         } finally {
             setIsSubmitting(false)
@@ -320,6 +338,57 @@ export function DoctorView() {
     const handleViewTreatmentDetails = (treatmentId: string) => {
         setSelectedTreatmentForDetails(treatmentId)
         setShowTreatmentDetails(true)
+    }
+
+    const handleEditTreatment = (treatmentId: string) => {
+        const treatment = treatments.find(t => t.id === treatmentId)
+        if (!treatment) return
+
+        // Only allow editing pending treatments
+        if (treatment.status !== 'pending') {
+            alert(`Cannot edit ${treatment.status} treatments. Only pending treatments can be modified.`)
+            return
+        }
+
+        setEditingTreatment(treatmentId)
+        setFormData({
+            patientId: treatment.patientId,
+            patientName: treatment.patientName,
+            diagnosis: treatment.diagnosis,
+            treatmentDetails: treatment.treatmentDetails || '',
+            cost: treatment.cost.toString(),
+            costBreakdown: {
+                consultation: treatment.costBreakdown?.consultation.toString() || '',
+                procedures: treatment.costBreakdown?.procedures.toString() || '',
+                medication: treatment.costBreakdown?.medication.toString() || '',
+                equipment: treatment.costBreakdown?.equipment.toString() || '',
+                other: treatment.costBreakdown?.other.toString() || ''
+            },
+            date: treatment.date,
+            medicalReports: treatment.medicalReports || []
+        })
+        setShowAddForm(true)
+    }
+
+    const handleDeleteTreatment = (treatmentId: string) => {
+        const treatment = treatments.find(t => t.id === treatmentId)
+        if (!treatment) return
+
+        // Only allow deleting pending treatments
+        if (treatment.status !== 'pending') {
+            alert(`Cannot delete ${treatment.status} treatments. Only pending treatments can be removed.`)
+            return
+        }
+
+        if (confirm('Are you sure you want to delete this treatment? This action cannot be undone.')) {
+            deleteTreatment(treatmentId)
+        }
+    }
+
+    const handleCancelEdit = () => {
+        setEditingTreatment(null)
+        resetForm()
+        setShowAddForm(false)
     }
 
     const exportToCSV = () => {
@@ -449,7 +518,7 @@ export function DoctorView() {
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="flex items-center gap-2">
                                             <FileText className="w-5 h-5 text-blue-600" />
-                                            Add New Treatment Record
+                                            {editingTreatment ? 'Edit Treatment Record' : 'Add New Treatment Record'}
                                         </CardTitle>
                                         <Button
                                             variant="ghost"
@@ -834,10 +903,7 @@ export function DoctorView() {
                                                             <Button
                                                                 type="button"
                                                                 variant="outline"
-                                                                onClick={() => {
-                                                                    resetForm()
-                                                                    setShowAddForm(false)
-                                                                }}
+                                                                onClick={handleCancelEdit}
                                                                 disabled={isSubmitting}
                                                             >
                                                                 Cancel
@@ -855,7 +921,7 @@ export function DoctorView() {
                                                                 ) : (
                                                                     <>
                                                                         <CheckCircle className="w-4 h-4" />
-                                                                        Save Treatment
+                                                                        {editingTreatment ? 'Update Treatment' : 'Save Treatment'}
                                                                     </>
                                                                 )}
                                                             </Button>
@@ -1928,14 +1994,34 @@ export function DoctorView() {
                                                             </Button>
                                                         )}
                                                         {treatment.status === 'pending' && (
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => handleSubmitTreatment(treatment.id)}
-                                                                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700"
-                                                            >
-                                                                <Send className="w-3 h-3" />
-                                                                Submit
-                                                            </Button>
+                                                            <>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleEditTreatment(treatment.id)}
+                                                                    className="flex items-center gap-1 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
+                                                                >
+                                                                    <Edit className="w-3 h-3" />
+                                                                    Edit
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleDeleteTreatment(treatment.id)}
+                                                                    className="flex items-center gap-1 border-red-500 text-red-600 hover:bg-red-50"
+                                                                >
+                                                                    <XCircle className="w-3 h-3" />
+                                                                    Delete
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => handleSubmitTreatment(treatment.id)}
+                                                                    className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700"
+                                                                >
+                                                                    <Send className="w-3 h-3" />
+                                                                    Submit
+                                                                </Button>
+                                                            </>
                                                         )}
                                                         {treatment.status === 'submitted' && !treatment.dischargeSummary && (
                                                             <Button

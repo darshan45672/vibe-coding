@@ -93,6 +93,7 @@ interface AppState {
     setCurrentUser: (user: User) => void
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     updateTreatment: (treatmentId: string, updates: Partial<Treatment>) => void
+    deleteTreatment: (treatmentId: string) => void
     submitTreatment: (treatmentId: string) => void
     addDischargeSummary: (treatmentId: string, summary: string) => void
     validateTreatmentForClaim: (treatmentId: string, isValid: boolean, notes?: string) => void
@@ -395,6 +396,12 @@ export const useAppStore = create<AppState>((set, get) => ({
             treatments: state.treatments.map(t =>
                 t.id === treatmentId ? { ...t, ...updates } : t
             )
+        }))
+    },
+
+    deleteTreatment: (treatmentId) => {
+        set(state => ({
+            treatments: state.treatments.filter(t => t.id !== treatmentId)
         }))
     },
 
