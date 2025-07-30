@@ -7,6 +7,7 @@ export interface Treatment {
     patientId: string
     patientName: string
     diagnosis: string
+    treatmentDetails?: string
     cost: number
     date: string
     status: 'pending' | 'submitted'
@@ -71,6 +72,7 @@ interface AppState {
     setCurrentRole: (role: 'doctor' | 'patient' | 'insurance' | 'bank') => void
     setCurrentUser: (user: User) => void
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
+    updateTreatment: (treatmentId: string, updates: Partial<Treatment>) => void
     submitTreatment: (treatmentId: string) => void
     addAppointment: (appointment: Omit<Appointment, 'id' | 'status' | 'bookedDate'>) => void
     updateAppointment: (appointmentId: string, updates: Partial<Omit<Appointment, 'id' | 'bookedDate'>>) => void
@@ -104,9 +106,20 @@ const dummyTreatments: Treatment[] = [
         patientId: '3',
         patientName: 'John Smith',
         diagnosis: 'Annual Physical Examination',
+        treatmentDetails: 'Comprehensive health check-up including blood work, vital signs monitoring, and general physical assessment.',
         cost: 250,
+        costBreakdown: {
+            consultation: 100,
+            procedures: 80,
+            medication: 20,
+            equipment: 30,
+            other: 20
+        },
         date: '2025-07-25',
-        status: 'submitted'
+        status: 'submitted',
+        medicalReports: ['blood_test_results.pdf', 'physical_exam_report.pdf'],
+        validatedForClaim: true,
+        validationNotes: 'All procedures completed successfully and documented properly.'
     },
     {
         id: '2',
@@ -115,7 +128,15 @@ const dummyTreatments: Treatment[] = [
         patientId: '4',
         patientName: 'Emma Wilson',
         diagnosis: 'Sprained Ankle Treatment',
+        treatmentDetails: 'X-ray examination, pain management, and physical therapy consultation for grade 2 ankle sprain.',
         cost: 450,
+        costBreakdown: {
+            consultation: 150,
+            procedures: 200,
+            medication: 50,
+            equipment: 30,
+            other: 20
+        },
         date: '2025-07-28',
         status: 'submitted'
     },
