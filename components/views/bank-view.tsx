@@ -231,7 +231,7 @@ export function BankView() {
 
                                     <div>
                                         <h4 className="font-medium text-gray-900 mb-2">Selected Action</h4>
-                                        <Badge 
+                                        <Badge
                                             variant={selectedAction === 'pay' ? 'default' : 'destructive'}
                                             className="mb-4"
                                         >
@@ -324,25 +324,25 @@ export function BankView() {
                                                 {payment.initiatedDate}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge 
+                                                <Badge
                                                     variant={
-                                                        payment.status === 'completed' 
-                                                            ? 'default' 
-                                                            : payment.status === 'rejected' 
-                                                                ? 'destructive' 
+                                                        payment.status === 'completed'
+                                                            ? 'default'
+                                                            : payment.status === 'rejected'
+                                                                ? 'destructive'
                                                                 : 'secondary'
                                                     }
                                                     className={
-                                                        payment.status === 'completed' 
+                                                        payment.status === 'completed'
                                                             ? 'bg-green-100 text-green-800'
                                                             : payment.status === 'rejected'
                                                                 ? 'bg-red-100 text-red-800'
                                                                 : ''
                                                     }
                                                 >
-                                                    {payment.status === 'completed' ? 'Paid' : 
-                                                     payment.status === 'rejected' ? 'Rejected' : 
-                                                     payment.status}
+                                                    {payment.status === 'completed' ? 'Paid' :
+                                                        payment.status === 'rejected' ? 'Rejected' :
+                                                            payment.status}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>

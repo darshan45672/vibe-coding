@@ -1333,10 +1333,10 @@ export function PatientView() {
                                             </TableCell>
                                             <TableCell className="text-xs sm:text-sm px-2 sm:px-4 py-3 sm:py-4">
                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${appointment.status === 'scheduled'
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : appointment.status === 'completed'
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-red-100 text-red-800'
+                                                    ? 'bg-blue-100 text-blue-800'
+                                                    : appointment.status === 'completed'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-red-100 text-red-800'
                                                     }`}>
                                                     {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                                                 </span>
@@ -1418,10 +1418,10 @@ export function PatientView() {
                                         <div>
                                             <label className="text-xs sm:text-sm font-medium text-gray-600">Status</label>
                                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${appointment.status === 'scheduled'
-                                                    ? 'bg-blue-100 text-blue-800'
-                                                    : appointment.status === 'completed'
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-red-100 text-red-800'
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : appointment.status === 'completed'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
                                                 }`}>
                                                 {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
                                             </span>
