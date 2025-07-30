@@ -7,21 +7,38 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, Send } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, Send, XCircle } from 'lucide-react'
 
 export function BankView() {
-    const { claims, payments, completePayment } = useAppStore()
+    const { claims, payments, completePayment, rejectPayment } = useAppStore()
     const [selectedPayment, setSelectedPayment] = useState<string | null>(null)
     const [processingNotes, setProcessingNotes] = useState('')
+    const [paymentActions, setPaymentActions] = useState<Record<string, string>>({})
 
     const approvedClaims = claims.filter(c => c.status === 'approved')
-    const pendingPayments = payments.filter(p => p.status === 'initiated')
+    const pendingPayments = payments.filter(p => p.status === 'pending')
     const completedPayments = payments.filter(p => p.status === 'completed')
+    const rejectedPayments = payments.filter(p => p.status === 'rejected')
 
-    const handleCompletePayment = (paymentId: string) => {
-        completePayment(paymentId, processingNotes)
+    const handlePaymentAction = (paymentId: string, action: string) => {
+        setPaymentActions(prev => ({ ...prev, [paymentId]: action }))
+    }
+
+    const handleProcessPayment = (paymentId: string) => {
+        const action = paymentActions[paymentId]
+        if (action === 'pay') {
+            completePayment(paymentId, processingNotes)
+        } else if (action === 'reject') {
+            rejectPayment(paymentId, processingNotes)
+        }
         setSelectedPayment(null)
         setProcessingNotes('')
+        setPaymentActions(prev => {
+            const newActions = { ...prev }
+            delete newActions[paymentId]
+            return newActions
+        })
     }
 
     const getPaymentDetails = (claimId: string) => {
@@ -35,6 +52,10 @@ export function BankView() {
 
     const getPendingAmount = () => {
         return pendingPayments.reduce((sum, payment) => sum + payment.amount, 0)
+    }
+
+    const getAllProcessedPayments = () => {
+        return [...completedPayments, ...rejectedPayments]
     }
 
     return (
@@ -89,6 +110,7 @@ export function BankView() {
                             <TableBody>
                                 {pendingPayments.map(payment => {
                                     const claimDetails = getPaymentDetails(payment.claimId)
+                                    const selectedAction = paymentActions[payment.id]
                                     return (
                                         <TableRow key={payment.id}>
                                             <TableCell className="font-medium">#{payment.id}</TableCell>
@@ -103,14 +125,45 @@ export function BankView() {
                                                 {payment.initiatedDate}
                                             </TableCell>
                                             <TableCell>
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => setSelectedPayment(payment.id)}
-                                                    className="flex items-center gap-2"
-                                                >
-                                                    <Send className="w-4 h-4" />
-                                                    Process
-                                                </Button>
+                                                <Badge variant="secondary" className="text-yellow-600 bg-yellow-100">
+                                                    Pending
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Select
+                                                        value={selectedAction || ""}
+                                                        onValueChange={(value) => handlePaymentAction(payment.id, value)}
+                                                    >
+                                                        <SelectTrigger className="w-32">
+                                                            <SelectValue placeholder="Select action" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="pay">Pay</SelectItem>
+                                                            <SelectItem value="reject">Reject</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {selectedAction && (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => setSelectedPayment(payment.id)}
+                                                            className="flex items-center gap-2"
+                                                            variant={selectedAction === 'pay' ? 'default' : 'destructive'}
+                                                        >
+                                                            {selectedAction === 'pay' ? (
+                                                                <>
+                                                                    <CheckCircle className="w-4 h-4" />
+                                                                    Process
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <XCircle className="w-4 h-4" />
+                                                                    Reject
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     )
@@ -133,6 +186,7 @@ export function BankView() {
                         {(() => {
                             const payment = payments.find(p => p.id === selectedPayment)
                             const claimDetails = payment ? getPaymentDetails(payment.claimId) : null
+                            const selectedAction = paymentActions[selectedPayment]
 
                             if (!payment || !claimDetails) return null
 
@@ -177,22 +231,44 @@ export function BankView() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium mb-2">Processing Notes</label>
+                                        <h4 className="font-medium text-gray-900 mb-2">Selected Action</h4>
+                                        <Badge 
+                                            variant={selectedAction === 'pay' ? 'default' : 'destructive'}
+                                            className="mb-4"
+                                        >
+                                            {selectedAction === 'pay' ? 'Pay' : 'Reject'} Payment
+                                        </Badge>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">
+                                            {selectedAction === 'pay' ? 'Payment' : 'Rejection'} Notes
+                                        </label>
                                         <Textarea
                                             value={processingNotes}
                                             onChange={(e) => setProcessingNotes(e.target.value)}
-                                            placeholder="Add notes about the payment processing..."
+                                            placeholder={`Add notes about the payment ${selectedAction === 'pay' ? 'processing' : 'rejection'}...`}
                                             rows={3}
                                         />
                                     </div>
 
                                     <div className="flex gap-2">
                                         <Button
-                                            onClick={() => handleCompletePayment(selectedPayment)}
-                                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                                            onClick={() => handleProcessPayment(selectedPayment)}
+                                            className="flex items-center gap-2"
+                                            variant={selectedAction === 'pay' ? 'default' : 'destructive'}
                                         >
-                                            <CheckCircle className="w-4 h-4" />
-                                            Complete Payment
+                                            {selectedAction === 'pay' ? (
+                                                <>
+                                                    <CheckCircle className="w-4 h-4" />
+                                                    Complete Payment
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <XCircle className="w-4 h-4" />
+                                                    Reject Payment
+                                                </>
+                                            )}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -216,7 +292,7 @@ export function BankView() {
                     <CardTitle>Payment History</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {payments.length === 0 ? (
+                    {getAllProcessedPayments().length === 0 ? (
                         <p className="text-gray-500 text-center py-8">No payments processed yet.</p>
                     ) : (
                         <Table>
@@ -233,7 +309,7 @@ export function BankView() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {payments.map(payment => {
+                                {getAllProcessedPayments().map(payment => {
                                     const claimDetails = getPaymentDetails(payment.claimId)
                                     return (
                                         <TableRow key={payment.id}>
@@ -249,8 +325,25 @@ export function BankView() {
                                                 {payment.initiatedDate}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant={payment.status === 'completed' ? 'default' : 'secondary'}>
-                                                    {payment.status}
+                                                <Badge 
+                                                    variant={
+                                                        payment.status === 'completed' 
+                                                            ? 'default' 
+                                                            : payment.status === 'rejected' 
+                                                                ? 'destructive' 
+                                                                : 'secondary'
+                                                    }
+                                                    className={
+                                                        payment.status === 'completed' 
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : payment.status === 'rejected'
+                                                                ? 'bg-red-100 text-red-800'
+                                                                : ''
+                                                    }
+                                                >
+                                                    {payment.status === 'completed' ? 'Paid' : 
+                                                     payment.status === 'rejected' ? 'Rejected' : 
+                                                     payment.status}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
