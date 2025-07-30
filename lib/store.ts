@@ -59,6 +59,8 @@ interface AppState {
     addTreatment: (treatment: Omit<Treatment, 'id' | 'status'>) => void
     submitTreatment: (treatmentId: string) => void
     addClaim: (claim: Omit<Claim, 'id' | 'status' | 'submittedDate'>) => void
+    updateClaim: (claimId: string, updates: Partial<Omit<Claim, 'id' | 'submittedDate'>>) => void
+    deleteClaim: (claimId: string) => void
     reviewClaim: (claimId: string, status: 'approved' | 'rejected', notes?: string) => void
     addPayment: (payment: Omit<Payment, 'id' | 'status' | 'initiatedDate'>) => void
     completePayment: (paymentId: string, notes?: string) => void
@@ -97,6 +99,50 @@ const dummyTreatments: Treatment[] = [
         cost: 450,
         date: '2025-07-28',
         status: 'submitted'
+    },
+    {
+        id: '3',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        diagnosis: 'Blood Pressure Check',
+        cost: 150,
+        date: '2025-07-20',
+        status: 'submitted'
+    },
+    {
+        id: '4',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        diagnosis: 'Flu Treatment',
+        cost: 200,
+        date: '2025-07-22',
+        status: 'submitted'
+    },
+    {
+        id: '5',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        diagnosis: 'Diabetes Consultation',
+        cost: 300,
+        date: '2025-07-24',
+        status: 'pending'
+    },
+    {
+        id: '6',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        patientId: '3',
+        patientName: 'John Smith',
+        diagnosis: 'Dental Checkup',
+        cost: 180,
+        date: '2025-07-29',
+        status: 'submitted'
     }
 ]
 
@@ -117,6 +163,19 @@ const dummyClaims: Claim[] = [
         insuranceNotes: 'Claim approved - routine checkup covered under policy'
     },
     {
+        id: '5',
+        patientId: '3',
+        patientName: 'John Smith',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        treatmentId: '6',
+        diagnosis: 'Dental Checkup',
+        cost: 180,
+        documents: ['dental_report.pdf'],
+        status: 'pending',
+        submittedDate: '2025-07-30'
+    },
+    {
         id: '2',
         patientId: '4',
         patientName: 'Emma Wilson',
@@ -128,6 +187,36 @@ const dummyClaims: Claim[] = [
         documents: ['x_ray.pdf', 'treatment_plan.pdf'],
         status: 'pending',
         submittedDate: '2025-07-29'
+    },
+    {
+        id: '3',
+        patientId: '4',
+        patientName: 'Emma Wilson',
+        doctorId: '1',
+        doctorName: 'Dr. Sarah Johnson',
+        treatmentId: '3',
+        diagnosis: 'Blood Pressure Check',
+        cost: 150,
+        documents: ['bp_report.pdf'],
+        status: 'approved',
+        submittedDate: '2025-07-21',
+        reviewedDate: '2025-07-22',
+        insuranceNotes: 'Approved - preventive care covered'
+    },
+    {
+        id: '4',
+        patientId: '5',
+        patientName: 'Robert Davis',
+        doctorId: '2',
+        doctorName: 'Dr. Michael Chen',
+        treatmentId: '4',
+        diagnosis: 'Flu Treatment',
+        cost: 200,
+        documents: ['prescription.pdf', 'visit_notes.pdf'],
+        status: 'rejected',
+        submittedDate: '2025-07-23',
+        reviewedDate: '2025-07-24',
+        insuranceNotes: 'Rejected - insufficient documentation'
     }
 ]
 
@@ -183,6 +272,25 @@ export const useAppStore = create<AppState>((set, get) => ({
             submittedDate: new Date().toISOString().split('T')[0]
         }
         set(state => ({ claims: [...state.claims, newClaim] }))
+    },
+
+    updateClaim: (claimId, updates) => {
+        set(state => ({
+            claims: state.claims.map(c =>
+                c.id === claimId ? { ...c, ...updates } : c
+            )
+        }))
+    },
+
+    deleteClaim: (claimId) => {
+        set(state => ({
+            claims: state.claims.filter(c => c.id !== claimId)
+        }))
+
+        // Also remove associated payment if it exists
+        set(state => ({
+            payments: state.payments.filter(p => p.claimId !== claimId)
+        }))
     },
 
     reviewClaim: (claimId, status, notes) => {
