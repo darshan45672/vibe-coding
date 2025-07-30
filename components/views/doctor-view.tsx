@@ -10,10 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CalendarDays, DollarSign, FileText, Send, Plus, Upload, CheckCircle, XCircle, Eye, FileCheck, Receipt, Search, Filter, Users, TrendingUp, Clock, User, AlertTriangle, BarChart3, Download, MessageSquare, Calendar, Activity, Target, Stethoscope, FileSpreadsheet, Bell, Settings, HelpCircle, Phone } from 'lucide-react'
+import { CalendarDays, DollarSign, FileText, Send, Plus, Upload, CheckCircle, XCircle, Eye, FileCheck, Receipt, Search, Filter, Users, TrendingUp, Clock, User, AlertTriangle, BarChart3, Download, MessageSquare, Calendar, Activity, Stethoscope, FileSpreadsheet, Bell, Settings, Phone } from 'lucide-react'
 
 export function DoctorView() {
-    const { treatments, users, claims, addTreatment, updateTreatment, submitTreatment, addDischargeSummary, validateTreatmentForClaim } = useAppStore()
+    const { treatments, users, claims, addTreatment, submitTreatment, addDischargeSummary, validateTreatmentForClaim } = useAppStore()
     const [showAddForm, setShowAddForm] = useState(false)
     const [selectedTreatment, setSelectedTreatment] = useState<string | null>(null)
     const [showDischargeForm, setShowDischargeForm] = useState(false)
@@ -23,12 +23,8 @@ export function DoctorView() {
     const [searchTerm, setSearchTerm] = useState('')
     const [filterStatus, setFilterStatus] = useState<string>('all')
     const [filterPatient, setFilterPatient] = useState<string>('all')
-    const [showAnalytics, setShowAnalytics] = useState(false)
-    const [showAppointments, setShowAppointments] = useState(false)
-    const [showQuickNotes, setShowQuickNotes] = useState(false)
     const [quickNotes, setQuickNotes] = useState('')
     const [selectedDateRange, setSelectedDateRange] = useState('week')
-    const [showNotifications, setShowNotifications] = useState(false)
     const [activeSection, setActiveSection] = useState<'notifications' | 'analytics' | 'appointments' | 'quickNotes' | null>(null)
     const [formData, setFormData] = useState({
         patientId: '',
@@ -348,19 +344,9 @@ export function DoctorView() {
         window.URL.revokeObjectURL(url)
     }
 
-    const updateReportStatus = (treatmentId: string, reportId: string, newStatus: MedicalReport['status']) => {
-        const treatment = doctorTreatments.find(t => t.id === treatmentId)
-        if (treatment && treatment.medicalReports) {
-            const updatedReports = treatment.medicalReports.map(report =>
-                report.id === reportId ? { ...report, status: newStatus } : report
-            )
-            updateTreatment(treatmentId, { medicalReports: updatedReports })
-        }
-    }
-
     const getDateRangeData = (range: string) => {
         const now = new Date()
-        let startDate = new Date()
+        const startDate = new Date()
 
         switch (range) {
             case 'week':
@@ -484,8 +470,8 @@ export function DoctorView() {
                                             {[1, 2, 3].map((step) => (
                                                 <div key={step} className="flex items-center">
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${currentStep >= step
-                                                            ? 'bg-blue-600 text-white shadow-md'
-                                                            : 'bg-gray-200 text-gray-600'
+                                                        ? 'bg-blue-600 text-white shadow-md'
+                                                        : 'bg-gray-200 text-gray-600'
                                                         }`}>
                                                         {currentStep > step ? (
                                                             <CheckCircle className="w-5 h-5" />
@@ -759,7 +745,7 @@ export function DoctorView() {
                                                         <div className="space-y-3">
                                                             <h4 className="font-medium text-gray-900">Uploaded Reports ({formData.medicalReports.length})</h4>
                                                             <div className="space-y-2 max-h-40 overflow-y-auto">
-                                                                {formData.medicalReports.map((report, index) => (
+                                                                {formData.medicalReports.map((report) => (
                                                                     <div key={report.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
                                                                         <div className="flex items-center gap-3">
                                                                             <div className="flex items-center gap-1">
@@ -1142,7 +1128,7 @@ export function DoctorView() {
                             <div className="flex items-center justify-between">
                                 <CardTitle className="flex items-center gap-2">
                                     <Calendar className="w-5 h-5 text-purple-600" />
-                                    Today's Schedule & Appointments
+                                    Today&apos;s Schedule & Appointments
                                 </CardTitle>
                                 <Button
                                     variant="ghost"
@@ -1157,7 +1143,7 @@ export function DoctorView() {
                         <CardContent>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h4 className="font-semibold text-gray-900 mb-3">Today's Appointments</h4>
+                                    <h4 className="font-semibold text-gray-900 mb-3">Today&apos;s Appointments</h4>
                                     <div className="space-y-3">
                                         <div className="p-3 border rounded-lg">
                                             <div className="flex justify-between items-center">
@@ -1474,7 +1460,7 @@ export function DoctorView() {
                                     <h4 className="font-medium text-green-800 mb-2">✅ Validating Treatment as Insurance-Eligible</h4>
                                     <p className="text-sm text-green-700">
                                         This treatment will be marked as valid for insurance claims,
-                                        improving the patient's chance of claim approval.
+                                        improving the patient&apos;s chance of claim approval.
                                     </p>
                                 </div>
                             )}
@@ -1610,8 +1596,8 @@ export function DoctorView() {
                                         <div>
                                             <h4 className="font-medium text-gray-900 mb-2">Medical Reports</h4>
                                             <div className="space-y-2">
-                                                {treatment.medicalReports.map((report, index) => (
-                                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                                                {treatment.medicalReports.map((report) => (
+                                                    <div key={report.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
                                                         <div className="flex items-center gap-2">
                                                             <div className="flex items-center gap-1">
                                                                 {report.status === 'uploaded' && <CheckCircle className="w-4 h-4 text-green-600" />}

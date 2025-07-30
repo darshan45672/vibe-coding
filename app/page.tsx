@@ -78,7 +78,7 @@ export default function Home() {
           </CardHeader>
         </Card>
 
-        <Tabs value={currentRole} onValueChange={(value) => setCurrentRole(value as any)}>
+        <Tabs value={currentRole} onValueChange={(value) => setCurrentRole(value as "doctor" | "patient" | "insurance" | "bank")}>
           <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="doctor" className="flex items-center gap-2">
               {roleIcons.doctor}

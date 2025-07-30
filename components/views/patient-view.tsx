@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { CalendarDays, DollarSign, FileText, Upload, Plus, Clock, CheckCircle, XCircle, Calendar, Edit, Trash2, Eye, MoreHorizontal } from 'lucide-react'
 
 export function PatientView() {
-    const { treatments, claims, appointments, users, addClaim, updateClaim, deleteClaim, addAppointment, updateAppointment, deleteAppointment, updateAppointmentStatus, currentUser } = useAppStore()
+    const { treatments, claims, appointments, users, addClaim, updateClaim, deleteClaim, addAppointment, updateAppointment, deleteAppointment, currentUser } = useAppStore()
     const [showClaimForm, setShowClaimForm] = useState(false)
     const [showAppointmentForm, setShowAppointmentForm] = useState(false)
     const [editingClaim, setEditingClaim] = useState<string | null>(null)
@@ -282,10 +282,6 @@ export function PatientView() {
         }
     }
 
-    const handleViewAppointment = (appointmentId: string) => {
-        setViewingAppointment(appointmentId)
-    }
-
     const handleCancelAppointmentEdit = () => {
         setEditingAppointment(null)
         setAppointmentData({
@@ -509,7 +505,7 @@ export function PatientView() {
                                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
                                         <h4 className="font-medium text-blue-900 mb-1">Select Your Treatment</h4>
                                         <p className="text-sm text-blue-800">
-                                            Choose from treatments you've received from our network doctors. Only submitted treatments that haven't been claimed yet are available.
+                                            Choose from treatments you&apos;ve received from our network doctors. Only submitted treatments that haven&apos;t been claimed yet are available.
                                         </p>
                                     </div>
 
@@ -690,7 +686,7 @@ export function PatientView() {
                                                 </TableCell>
                                                 <TableCell className="py-3 sm:py-4 px-2 sm:px-4">
                                                     {associatedClaim ? (
-                                                        <Badge variant={getStatusColor(associatedClaim.status) as any} className="text-xs">
+                                                        <Badge variant={getStatusColor(associatedClaim.status) as "default" | "secondary" | "destructive" | "outline"} className="text-xs">
                                                             <span className="hidden sm:inline">Claimed - </span>{associatedClaim.status}
                                                         </Badge>
                                                     ) : canClaim ? (
@@ -764,7 +760,7 @@ export function PatientView() {
                                             <TableCell className="py-3 sm:py-4 px-2 sm:px-4">
                                                 <div className="flex items-center gap-1 sm:gap-2">
                                                     {getStatusIcon(claim.status)}
-                                                    <Badge variant={getStatusColor(claim.status) as any} className="capitalize text-xs">
+                                                    <Badge variant={getStatusColor(claim.status) as "default" | "secondary" | "destructive" | "outline"} className="capitalize text-xs">
                                                         {claim.status}
                                                     </Badge>
                                                 </div>
@@ -879,7 +875,7 @@ export function PatientView() {
                                             <label className="text-xs sm:text-sm font-medium text-gray-600">Status</label>
                                             <div className="flex items-center gap-2">
                                                 {getStatusIcon(claim.status)}
-                                                <Badge variant={getStatusColor(claim.status) as any} className="capitalize text-xs">
+                                                <Badge variant={getStatusColor(claim.status) as "default" | "secondary" | "destructive" | "outline"} className="capitalize text-xs">
                                                     {claim.status}
                                                 </Badge>
                                             </div>
@@ -1037,7 +1033,7 @@ export function PatientView() {
                                             Treatment Selection
                                         </h4>
                                         <p className="text-xs sm:text-sm text-gray-600 mb-4">
-                                            Choose from your available treatments. You can switch to any submitted treatment that hasn't been claimed yet.
+                                            Choose from your available treatments. You can switch to any submitted treatment that hasn&apos;t been claimed yet.
                                         </p>
                                     </div>
 
@@ -1191,7 +1187,7 @@ export function PatientView() {
                                                         Treatment Change Notice
                                                     </h6>
                                                     <p className="text-xs text-amber-800">
-                                                        You're about to change this claim to a different treatment. This will update the diagnosis, doctor, cost, and date associated with this claim.
+                                                        You&apos;re about to change this claim to a different treatment. This will update the diagnosis, doctor, cost, and date associated with this claim.
                                                     </p>
                                                 </div>
                                             </div>

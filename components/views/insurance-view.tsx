@@ -259,7 +259,7 @@ export function InsuranceView() {
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 {getStatusIcon(claim.status)}
-                                                <Badge variant={getStatusColor(claim.status) as any}>
+                                                <Badge variant={getStatusColor(claim.status) as "default" | "secondary" | "destructive" | "outline"}>
                                                     {claim.status}
                                                 </Badge>
                                             </div>

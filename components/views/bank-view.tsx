@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, Send, XCircle } from 'lucide-react'
+import { CalendarDays, DollarSign, CreditCard, CheckCircle, Clock, XCircle } from 'lucide-react'
 
 export function BankView() {
     const { claims, payments, completePayment, rejectPayment } = useAppStore()
@@ -16,7 +16,6 @@ export function BankView() {
     const [processingNotes, setProcessingNotes] = useState('')
     const [paymentActions, setPaymentActions] = useState<Record<string, string>>({})
 
-    const approvedClaims = claims.filter(c => c.status === 'approved')
     const pendingPayments = payments.filter(p => p.status === 'pending')
     const completedPayments = payments.filter(p => p.status === 'completed')
     const rejectedPayments = payments.filter(p => p.status === 'rejected')
