@@ -15,18 +15,22 @@ export function ProviderNetwork() {
     const [searchFilters, setSearchFilters] = useState({
         city: '',
         specialty: '',
-        type: ''
+        type: 'all'
     })
     const [filteredProviders, setFilteredProviders] = useState(providerNetwork)
     const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
 
     const handleSearch = () => {
-        const results = searchProviders(searchFilters)
+        const searchParams = {
+            ...searchFilters,
+            type: searchFilters.type === 'all' ? '' : searchFilters.type
+        }
+        const results = searchProviders(searchParams)
         setFilteredProviders(results)
     }
 
     const clearFilters = () => {
-        setSearchFilters({ city: '', specialty: '', type: '' })
+        setSearchFilters({ city: '', specialty: '', type: 'all' })
         setFilteredProviders(providerNetwork)
     }
 
@@ -123,7 +127,7 @@ export function ProviderNetwork() {
                                 <SelectValue placeholder="Provider type" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Types</SelectItem>
+                                <SelectItem value="all">All Types</SelectItem>
                                 <SelectItem value="hospital">Hospital</SelectItem>
                                 <SelectItem value="clinic">Clinic</SelectItem>
                                 <SelectItem value="diagnostic_center">Diagnostic Center</SelectItem>
