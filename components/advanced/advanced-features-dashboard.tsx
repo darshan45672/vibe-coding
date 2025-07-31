@@ -45,8 +45,8 @@ export function AdvancedFeaturesDashboard() {
         },
         {
             id: 'aadhaar',
-            title: 'Aadhaar Validation',
-            description: 'KYC verification using Aadhaar authentication',
+            title: 'ID Validation',
+            description: 'KYC verification using government ID authentication',
             icon: '🪪',
             component: <AadhaarValidation />
         }

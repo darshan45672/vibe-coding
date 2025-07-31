@@ -25,7 +25,7 @@ export function AadhaarValidation() {
             await validateAadhaar(aadhaarNumber)
             setShowOtpInput(true)
         } catch (error) {
-            console.error('Aadhaar validation failed:', error)
+            console.error('ID validation failed:', error)
         } finally {
             setIsValidating(false)
         }
@@ -73,7 +73,7 @@ export function AadhaarValidation() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        🪪 Aadhaar Validation System
+                        🪪 ID Validation System
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -101,14 +101,20 @@ export function AadhaarValidation() {
             {/* Validation Form */}
             <Card>
                 <CardHeader>
-                    <CardTitle>New Aadhaar Validation</CardTitle>
+                    <CardTitle>Verify Your ID</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {!showOtpInput ? (
                         <div className="space-y-4">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <h4 className="font-medium text-blue-900 mb-2">🛡️ Secure ID Verification</h4>
+                                <p className="text-sm text-blue-700">
+                                    Enter your Aadhaar number to verify your identity. We'll send an OTP to your registered mobile number for verification.
+                                </p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium mb-2">
-                                    Aadhaar Number
+                                    Aadhaar Number / Government ID
                                 </label>
                                 <Input
                                     placeholder="Enter 12-digit Aadhaar number"
@@ -131,22 +137,25 @@ export function AadhaarValidation() {
                                         Sending OTP...
                                     </>
                                 ) : (
-                                    'Send OTP for Validation'
+                                    'Send OTP for Verification'
                                 )}
                             </Button>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h4 className="font-medium text-blue-900 mb-2">OTP Sent Successfully</h4>
-                                <p className="text-sm text-blue-700">
-                                    An OTP has been sent to the mobile number registered with Aadhaar number 
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <h4 className="font-medium text-green-900 mb-2">📱 OTP Sent Successfully</h4>
+                                <p className="text-sm text-green-700">
+                                    An OTP has been sent to the mobile number registered with ID number 
                                     <strong> {formatAadhaarNumber(aadhaarNumber)}</strong>
+                                </p>
+                                <p className="text-xs text-green-600 mt-2">
+                                    Please check your SMS and enter the 6-digit OTP below.
                                 </p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-2">
-                                    Enter OTP
+                                    Enter 6-Digit OTP
                                 </label>
                                 <Input
                                     placeholder="Enter 6-digit OTP"
@@ -191,54 +200,71 @@ export function AadhaarValidation() {
                     <CardTitle>Validation History</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Validation ID</TableHead>
-                                <TableHead>User ID</TableHead>
-                                <TableHead>Aadhaar Number</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Validation Date</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {aadhaarValidations.map(validation => (
-                                <TableRow key={validation.id}>
-                                    <TableCell className="font-medium">{validation.id}</TableCell>
-                                    <TableCell>{validation.userId}</TableCell>
-                                    <TableCell>
-                                        <span className="font-mono">
-                                            {formatAadhaarNumber(validation.aadhaarNumber)}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>{validation.name}</TableCell>
-                                    <TableCell>
-                                        <Badge className={getStatusColor(validation.validationStatus)}>
-                                            {validation.validationStatus === 'verified' && '✅'}
-                                            {validation.validationStatus === 'pending' && '⏳'}
-                                            {validation.validationStatus === 'failed' && '❌'}
-                                            {validation.validationStatus.toUpperCase()}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        {validation.validationDate || 'Pending'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Button 
-                                            size="sm" 
-                                            variant="outline"
-                                            onClick={() => setSelectedValidation(validation.id)}
-                                        >
-                                            <Eye className="w-4 h-4 mr-1" />
-                                            Details
-                                        </Button>
-                                    </TableCell>
+                    {aadhaarValidations.length === 0 ? (
+                        <div className="text-center py-8">
+                            <div className="text-6xl mb-4">🆔</div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                No ID Validations Yet
+                            </h3>
+                            <p className="text-gray-600 mb-4">
+                                Start by verifying your government ID above. Your validation history will appear here.
+                            </p>
+                            <div className="text-sm text-gray-500">
+                                <p>✅ Secure OTP-based verification</p>
+                                <p>🔒 Government-approved authentication</p>
+                                <p>⚡ Instant verification results</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Validation ID</TableHead>
+                                    <TableHead>User ID</TableHead>
+                                    <TableHead>ID Number</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Validation Date</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {aadhaarValidations.map(validation => (
+                                    <TableRow key={validation.id}>
+                                        <TableCell className="font-medium">{validation.id}</TableCell>
+                                        <TableCell>{validation.userId}</TableCell>
+                                        <TableCell>
+                                            <span className="font-mono">
+                                                {formatAadhaarNumber(validation.aadhaarNumber)}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>{validation.name}</TableCell>
+                                        <TableCell>
+                                            <Badge className={getStatusColor(validation.validationStatus)}>
+                                                {validation.validationStatus === 'verified' && '✅'}
+                                                {validation.validationStatus === 'pending' && '⏳'}
+                                                {validation.validationStatus === 'failed' && '❌'}
+                                                {validation.validationStatus.toUpperCase()}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {validation.validationDate || 'Pending'}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Button 
+                                                size="sm" 
+                                                variant="outline"
+                                                onClick={() => setSelectedValidation(validation.id)}
+                                            >
+                                                <Eye className="w-4 h-4 mr-1" />
+                                                Details
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 

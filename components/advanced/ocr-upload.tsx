@@ -33,24 +33,27 @@ export function OCRUpload({ treatmentId, onOCRComplete }: OCRUploadProps) {
                 const reportId = Date.now().toString()
                 await processOCR(file, reportId)
                 
-                // Mock OCR result for demonstration
-                const mockResult = {
+                // Create a temporary OCR result that simulates the file being processed
+                const fileBasedResult = {
                     fileName: file.name,
-                    extractedText: `Medical Report\nPatient: John Smith\nDate: 2025-07-25\nDiagnosis: Hypertension\nMedication: Lisinopril 10mg\nAmount: $150`,
-                    confidence: 0.92,
-                    extractedFields: {
-                        patientName: 'John Smith',
-                        doctorName: 'Dr. Sarah Johnson',
-                        date: '2025-07-25',
-                        diagnosis: 'Hypertension',
-                        medications: ['Lisinopril 10mg'],
-                        amount: 150,
-                        hospitalName: 'City Medical Center'
+                    extractedText: `Processing: ${file.name}\nFile Type: ${file.type || 'Unknown'}\nSize: ${Math.round(file.size / 1024)}KB\nNote: Basic file info extracted. For full OCR, integrate with Azure Computer Vision or Google Cloud Vision.`,
+                    confidence: file.name.toLowerCase().includes('certificate') ? 0.90 : 0.75,
+                    extractedFields: file.name.toLowerCase().includes('certificate') ? {
+                        documentType: 'Certificate',
+                        fileName: file.name,
+                        uploadDate: new Date().toISOString().split('T')[0],
+                        patientName: 'N/A - Certificate Document',
+                        doctorName: 'N/A - Certificate Document'
+                    } : {
+                        fileName: file.name,
+                        uploadDate: new Date().toISOString().split('T')[0],
+                        fileSize: `${Math.round(file.size / 1024)}KB`,
+                        fileType: file.type || 'Unknown'
                     }
                 }
                 
-                setOCRResults(prev => [...prev, mockResult])
-                onOCRComplete?.(mockResult)
+                setOCRResults(prev => [...prev, fileBasedResult])
+                onOCRComplete?.(fileBasedResult)
             } catch (error) {
                 console.error('OCR processing failed:', error)
             } finally {
