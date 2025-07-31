@@ -9,23 +9,25 @@ import { DoctorView } from '@/components/views/doctor-view'
 import { PatientView } from '@/components/views/patient-view'
 import { InsuranceView } from '@/components/views/insurance-view'
 import { BankView } from '@/components/views/bank-view'
-import { Stethoscope, User, Building2, Landmark } from 'lucide-react'
+import { AdvancedFeaturesDashboard } from '@/components/advanced/advanced-features-dashboard'
 
 export default function Home() {
   const { currentRole, setCurrentRole, currentUser, setCurrentUser, users } = useAppStore()
 
   const roleIcons = {
-    doctor: <Stethoscope className="w-4 h-4" />,
-    patient: <User className="w-4 h-4" />,
-    insurance: <Building2 className="w-4 h-4" />,
-    bank: <Landmark className="w-4 h-4" />
+    doctor: '👨‍⚕️',
+    patient: '🧍',
+    insurance: '🏢',
+    bank: '🏦',
+    advanced: '🚀'
   }
 
   const roleEmojis = {
     doctor: '👨‍⚕️',
     patient: '🧍',
     insurance: '🏢',
-    bank: '🏦'
+    bank: '🏦',
+    advanced: '🚀'
   }
 
   return (
@@ -78,23 +80,22 @@ export default function Home() {
           </CardHeader>
         </Card>
 
-        <Tabs value={currentRole} onValueChange={(value) => setCurrentRole(value as "doctor" | "patient" | "insurance" | "bank")}>
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+        <Tabs value={currentRole} onValueChange={(value) => setCurrentRole(value as "doctor" | "patient" | "insurance" | "bank" | "advanced")}>
+          <TabsList className="grid w-full grid-cols-5 mb-6">
             <TabsTrigger value="doctor" className="flex items-center gap-2">
-              {roleIcons.doctor}
-              👨‍⚕️ Doctor
+              {roleIcons.doctor} Doctor
             </TabsTrigger>
             <TabsTrigger value="patient" className="flex items-center gap-2">
-              {roleIcons.patient}
-              🧍 Patient
+              {roleIcons.patient} Patient
             </TabsTrigger>
             <TabsTrigger value="insurance" className="flex items-center gap-2">
-              {roleIcons.insurance}
-              🏢 Insurance
+              {roleIcons.insurance} Insurance
             </TabsTrigger>
             <TabsTrigger value="bank" className="flex items-center gap-2">
-              {roleIcons.bank}
-              🏦 Bank
+              {roleIcons.bank} Bank
+            </TabsTrigger>
+            <TabsTrigger value="advanced" className="flex items-center gap-2">
+              {roleIcons.advanced} Advanced
             </TabsTrigger>
           </TabsList>
 
@@ -112,6 +113,10 @@ export default function Home() {
 
           <TabsContent value="bank">
             <BankView />
+          </TabsContent>
+
+          <TabsContent value="advanced">
+            <AdvancedFeaturesDashboard />
           </TabsContent>
         </Tabs>
       </div>
