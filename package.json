@@ -1,39 +1,60 @@
 {
-  "name": "vibe-coding",
+  "name": "insu-claim-again",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
+    "@hookform/resolvers": "^5.2.1",
+    "@prisma/client": "^6.13.0",
+    "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-dialog": "^1.1.14",
-    "@radix-ui/react-dropdown-menu": "^2.1.15",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
-    "@radix-ui/react-tabs": "^1.1.12",
+    "@tanstack/react-query": "^5.83.1",
+    "@tanstack/react-query-devtools": "^5.83.1",
+    "aws-sdk": "^2.1692.0",
+    "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.534.0",
+    "date-fns": "^4.1.0",
+    "embla-carousel-react": "^8.6.0",
+    "lucide-react": "^0.535.0",
     "next": "15.4.5",
+    "next-auth": "^4.24.7",
+    "next-themes": "^0.4.6",
+    "prisma": "^6.13.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-hook-form": "^7.61.1",
+    "sonner": "^2.0.6",
     "tailwind-merge": "^3.3.1",
-    "zustand": "^5.0.6"
+    "zod": "^4.0.14",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "9.32.0",
     "eslint-config-next": "15.4.5",
     "tailwindcss": "^4",
-    "tw-animate-css": "^1.3.6",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }
