@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import Image from 'next/image'
+import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -107,19 +109,49 @@ export function AddReportModal({ open, onOpenChange }: AddReportModalProps) {
 
     setIsUploading(true)
     try {
-      // TODO: Implement file upload logic here
-      console.log('Uploading files for patient:', selectedPatientId)
-      console.log('Files:', uploadFiles)
+      // Find the selected patient's appointment ID
+      const selectedPatient = patients.find((p: any) => p.id === selectedPatientId)
       
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (!selectedPatient?.appointmentId) {
+        throw new Error('Appointment ID not found for selected patient')
+      }
+
+      // Create FormData for file upload
+      const formData = new FormData()
       
-      // Reset form and close modal
-      setSelectedPatientId('')
-      setUploadFiles([])
-      onOpenChange(false)
+      // Add appointment and patient IDs
+      formData.append('appointmentId', selectedPatient.appointmentId)
+      formData.append('patientId', selectedPatientId)
+      
+      // Add files with their types
+      uploadFiles.forEach((uploadFile, index) => {
+        formData.append('files', uploadFile.file)
+        formData.append(`type_${index}`, uploadFile.type)
+      })
+
+      // Upload to server
+      const response = await fetch('/api/documents', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        // Success - show success message and close modal
+        toast.success(`Successfully uploaded ${result.documents.length} document(s)!`)
+        
+        // Reset form and close modal
+        setSelectedPatientId('')
+        setUploadFiles([])
+        onOpenChange(false)
+      } else {
+        // Error from server
+        throw new Error(result.error || 'Upload failed')
+      }
     } catch (error) {
       console.error('Upload failed:', error)
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsUploading(false)
     }
@@ -316,7 +348,7 @@ export function AddReportModal({ open, onOpenChange }: AddReportModalProps) {
                     type="button"
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-gray-300 dark:border-slate-600"
+                    className="border-gray-300 dark:border-slate-600 cursor-pointer"
                   >
                     <FilePlus className="h-4 w-4 mr-2" />
                     Choose Files
@@ -359,9 +391,11 @@ export function AddReportModal({ open, onOpenChange }: AddReportModalProps) {
                       {/* File Preview/Icon */}
                       <div className="flex-shrink-0">
                         {uploadFile.preview ? (
-                          <img
+                          <Image
                             src={uploadFile.preview}
                             alt="Preview"
+                            width={48}
+                            height={48}
                             className="w-12 h-12 object-cover rounded-lg"
                           />
                         ) : (
@@ -405,7 +439,7 @@ export function AddReportModal({ open, onOpenChange }: AddReportModalProps) {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeFile(uploadFile.id)}
-                        className="flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        className="flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -423,14 +457,14 @@ export function AddReportModal({ open, onOpenChange }: AddReportModalProps) {
             variant="outline"
             onClick={handleClose}
             disabled={isUploading}
-            className="border-gray-300 dark:border-slate-600"
+            className="border-gray-300 dark:border-slate-600 cursor-pointer"
           >
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!selectedPatientId || uploadFiles.length === 0 || isUploading}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 cursor-pointer"
           >
             {isUploading ? (
               <>

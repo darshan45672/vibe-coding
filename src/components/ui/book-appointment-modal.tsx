@@ -1,4 +1,4 @@
-'use client'
+  'use client'
 
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { Calendar, Clock, User } from 'lucide-react'
 import { useCreateAppointment } from '@/hooks/use-appointments'
 import { useUsers } from '@/hooks/use-users'
+import { UserRole } from '@/types'
 
 interface BookAppointmentModalProps {
   open: boolean
@@ -29,9 +30,13 @@ interface AppointmentFormData {
 export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const createAppointment = useCreateAppointment()
-  const { data: doctorsData, isLoading: doctorsLoading, error: doctorsError } = useUsers({ role: 'DOCTOR' })
+  const { data: doctorsResponse, isLoading: doctorsLoading, error: doctorsError } = useUsers({ role: UserRole.DOCTOR })
+  
+  // Extract doctors array from response
+  const doctorsData = doctorsResponse?.users || []
   
   // Debug logging
+  console.log('Doctors response:', doctorsResponse)
   console.log('Doctors data:', doctorsData)
   console.log('Is array:', Array.isArray(doctorsData))
   console.log('Doctors error:', doctorsError)
@@ -108,11 +113,6 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
 
   // Get minimum date (today)
   const today = new Date().toISOString().split('T')[0]
-  
-  // Get minimum time (current time if selected date is today)
-  const selectedDate = watch('scheduledDate')
-  const isToday = selectedDate === today
-  const currentTime = new Date().toTimeString().slice(0, 5)
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -146,7 +146,7 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
                 value={selectedDoctorId}
                 onValueChange={(value: string) => setValue('doctorId', value)}
               >
-                <SelectTrigger className="h-12 border-gray-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg">
+                <SelectTrigger className="h-12 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800">
                   <SelectValue placeholder="Choose a doctor..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -160,7 +160,7 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="no-doctors" disabled>
                       No doctors available
                     </SelectItem>
                   )}
@@ -173,47 +173,82 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
           </div>
 
           {/* Date and Time Selection */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="scheduledDate" className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-green-600" />
-                Date *
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <Label htmlFor="scheduledDate" className="text-sm font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-md">
+                  <Calendar className="h-4 w-4 text-green-600 dark:text-green-400" />
+                </div>
+                Appointment Date *
               </Label>
-              <Input
-                id="scheduledDate"
-                type="date"
-                min={today}
-                className="h-12 border-gray-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg"
-                {...register('scheduledDate', { 
-                  required: 'Date is required' 
-                })}
-              />
+              <div className="relative">
+                <Input
+                  id="scheduledDate"
+                  type="date"
+                  min={today}
+                  className={`h-12 pl-4 pr-4 border-2 transition-all duration-200 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 ${
+                    errors.scheduledDate 
+                      ? 'border-red-300 dark:border-red-600 focus:border-red-500 dark:focus:border-red-400 focus:ring-red-200 dark:focus:ring-red-800' 
+                      : 'border-gray-300 dark:border-slate-600 focus:border-green-500 dark:focus:border-green-400 focus:ring-green-200 dark:focus:ring-green-800 hover:border-green-400 dark:hover:border-green-500'
+                  } focus:ring-2 rounded-lg shadow-sm font-medium`}
+                  {...register('scheduledDate', { 
+                    required: 'Please select an appointment date',
+                    validate: (value) => {
+                      const selectedDate = new Date(value);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      if (selectedDate < today) {
+                        return 'Please select a future date';
+                      }
+                      return true;
+                    }
+                  })}
+                />
+              </div>
               {errors.scheduledDate && (
-                <p className="text-sm text-red-600">{errors.scheduledDate.message}</p>
+                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                  <span className="text-red-500">⚠</span>
+                  {errors.scheduledDate.message}
+                </p>
               )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Select your preferred appointment date
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="scheduledTime" className="text-sm font-medium flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-600" />
-                Time *
+            <div className="space-y-3">
+              <Label htmlFor="scheduledTime" className="text-sm font-semibold flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                <div className="p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-md">
+                  <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                </div>
+                Appointment Time *
               </Label>
-              <Input
-                id="scheduledTime"
-                type="time"
-                min={isToday ? currentTime : '09:00'}
-                max="17:00"
-                className="h-12 border-gray-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg"
-                {...register('scheduledTime', { 
-                  required: 'Time is required' 
-                })}
-              />
+              <div className="relative">
+                <Input
+                  id="scheduledTime"
+                  type="time"
+                  className={`h-12 pl-4 pr-4 border-2 transition-all duration-200 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 ${
+                    errors.scheduledTime 
+                      ? 'border-red-300 dark:border-red-600 focus:border-red-500 dark:focus:border-red-400 focus:ring-red-200 dark:focus:ring-red-800' 
+                      : 'border-gray-300 dark:border-slate-600 focus:border-orange-500 dark:focus:border-orange-400 focus:ring-orange-200 dark:focus:ring-orange-800 hover:border-orange-400 dark:hover:border-orange-500'
+                  } focus:ring-2 rounded-lg shadow-sm font-medium`}
+                  {...register('scheduledTime', { 
+                    required: 'Please select an appointment time'
+                  })}
+                />
+              </div>
               {errors.scheduledTime && (
-                <p className="text-sm text-red-600">{errors.scheduledTime.message}</p>
+                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                  <span className="text-red-500">⚠</span>
+                  {errors.scheduledTime.message}
+                </p>
               )}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Select your preferred appointment time
+              </p>
             </div>
           </div>
-
+          
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes" className="text-sm font-medium">
@@ -222,7 +257,7 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
             <Textarea
               id="notes"
               placeholder="Add any additional notes or concerns..."
-              className="min-h-[100px] border-gray-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg resize-none"
+              className="min-h-[100px] border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 resize-none"
               {...register('notes')}
             />
             <p className="text-xs text-gray-500">
@@ -248,7 +283,7 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
               type="button"
               variant="outline"
               onClick={handleClose}
-              className="flex-1 h-12 border-gray-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+              className="flex-1 h-12 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
               disabled={isSubmitting}
             >
               Cancel
@@ -256,7 +291,7 @@ export function BookAppointmentModal({ open, onOpenChange }: BookAppointmentModa
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+              className="flex-1 h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
             >
               {isSubmitting ? (
                 <>

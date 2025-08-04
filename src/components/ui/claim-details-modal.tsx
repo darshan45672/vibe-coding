@@ -1,8 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { Badge } from '@/components/ui/badge'
 import { useUpdateClaim, useDeleteClaim } from '@/hooks/use-claims'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { 
@@ -10,28 +9,38 @@ import {
   User, 
   Building2, 
   CalendarDays, 
-  DollarSign,
   Stethoscope,
   Edit,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { UserRole, ClaimStatus } from '@/types'
 
 interface ClaimDetailsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   claim: any | null
+  session?: any
 }
 
-export function ClaimDetailsModal({ open, onOpenChange, claim }: ClaimDetailsModalProps) {
+export function ClaimDetailsModal({ open, onOpenChange, claim, session }: ClaimDetailsModalProps) {
   const updateClaimMutation = useUpdateClaim()
   const deleteClaimMutation = useDeleteClaim()
 
   if (!claim) return null
 
-  const canEdit = claim.status === 'DRAFT' || claim.status === 'UNDER_REVIEW'
+  const isInsuranceUser = session?.user?.role === UserRole.INSURANCE
+  const canEdit = !isInsuranceUser && (claim.status === 'DRAFT' || claim.status === 'UNDER_REVIEW')
   const canDelete = claim.status === 'DRAFT'
+  
+  // Insurance actions based on claim status
+  const canApprove = isInsuranceUser && claim.status === 'UNDER_REVIEW'
+  const canReject = isInsuranceUser && claim.status === 'UNDER_REVIEW'
+  const canSetUnderReview = isInsuranceUser && claim.status === 'SUBMITTED'
 
   const handleEdit = () => {
     // TODO: Implement edit functionality - could open an edit modal or navigate to edit page
@@ -49,9 +58,32 @@ export function ClaimDetailsModal({ open, onOpenChange, claim }: ClaimDetailsMod
         await deleteClaimMutation.mutateAsync(claim.id)
         toast.success('Claim deleted successfully')
         onOpenChange(false)
-      } catch (error) {
+      } catch {
         toast.error('Failed to delete claim')
       }
+    }
+  }
+
+  const handleStatusChange = async (newStatus: ClaimStatus) => {
+    try {
+      await updateClaimMutation.mutateAsync({
+        id: claim.id,
+        data: { status: newStatus }
+      })
+      
+      const statusMessages: Record<ClaimStatus, string> = {
+        [ClaimStatus.DRAFT]: 'Claim saved as draft',
+        [ClaimStatus.SUBMITTED]: 'Claim submitted',
+        [ClaimStatus.UNDER_REVIEW]: 'Claim status updated to Under Review',
+        [ClaimStatus.APPROVED]: 'Claim has been approved successfully',
+        [ClaimStatus.REJECTED]: 'Claim has been rejected',
+        [ClaimStatus.PAID]: 'Claim has been marked as paid'
+      }
+      
+      toast.success(statusMessages[newStatus] || 'Claim status updated')
+      onOpenChange(false)
+    } catch {
+      toast.error('Failed to update claim status')
     }
   }
 
@@ -276,7 +308,7 @@ export function ClaimDetailsModal({ open, onOpenChange, claim }: ClaimDetailsMod
                           variant="ghost"
                           size="sm"
                           onClick={() => window.open(doc.fileUrl, '_blank')}
-                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer"
                         >
                           View
                         </Button>
@@ -305,10 +337,11 @@ export function ClaimDetailsModal({ open, onOpenChange, claim }: ClaimDetailsMod
 
         <div className="border-t border-gray-200 dark:border-slate-700 pt-4 flex justify-between items-center">
           <div className="flex gap-2">
+            {/* Patient/Doctor Actions */}
             {canEdit && (
               <Button
                 onClick={handleEdit}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white cursor-pointer"
                 disabled={updateClaimMutation.isPending}
               >
                 <Edit className="h-4 w-4 mr-2" />
@@ -319,19 +352,55 @@ export function ClaimDetailsModal({ open, onOpenChange, claim }: ClaimDetailsMod
               <Button
                 onClick={handleDelete}
                 variant="destructive"
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 cursor-pointer"
                 disabled={deleteClaimMutation.isPending}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Claim
               </Button>
             )}
+
+            {/* Insurance Actions */}
+            {isInsuranceUser && (
+              <>
+                {canSetUnderReview && (
+                  <Button
+                    onClick={() => handleStatusChange(ClaimStatus.UNDER_REVIEW)}
+                    className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white cursor-pointer"
+                    disabled={updateClaimMutation.isPending}
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    Set Under Review
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button
+                    onClick={() => handleStatusChange(ClaimStatus.APPROVED)}
+                    className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white cursor-pointer"
+                    disabled={updateClaimMutation.isPending}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Approve
+                  </Button>
+                )}
+                {canReject && (
+                  <Button
+                    onClick={() => handleStatusChange(ClaimStatus.REJECTED)}
+                    className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white cursor-pointer"
+                    disabled={updateClaimMutation.isPending}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Reject
+                  </Button>
+                )}
+              </>
+            )}
           </div>
           
           <Button
             onClick={() => onOpenChange(false)}
             variant="outline"
-            className="border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
+            className="border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
           >
             Close
           </Button>
